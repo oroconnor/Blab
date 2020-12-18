@@ -51,7 +51,7 @@ airmasterk <- airmasterk %>%
 
 #grouping by daily means and doing calculations for error bars
 airmasterk <- airmasterk %>%
-  group_by(date) %>% #group by the date and hour columns
+  group_by(date) %>% #group by the date 
   summarise(daily_mean = mean(pm2.5), #daily pm2.5 mean
             daily_lnmean = mean(lnpm2.5), #daily natural log pm2.5
             sdlnpm2.5 = sd(lnpm2.5), #standard deviation of daily natural log pm2.5
