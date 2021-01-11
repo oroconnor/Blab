@@ -21,7 +21,7 @@ airmasterk <- df %>%
     tot2.5count = c2.0 - c3.0, 
     tot4.0count = c3.0 - c5.0, 
     tot7.5count = c5.0 - c10.0,
-    tot20count = c10.0,
+    tot20count = c10.0
     )
 
 #using 1.65 g/cm3 as density as per paper, calculating mass for each count bin, resulting in ug/m3
@@ -42,8 +42,8 @@ airmasterk <- airmasterk %>%
 airmasterk <- airmasterk %>% rowwise() %>%
   mutate(
     pm2.5 = sum(c(m0.4,m0.6,m0.85,m1.5,m2.5)),
-    pm10 = sum(c(m0.4,m0.6,m0.85,m1.5,m2.5,m4.0,m7.5,m20)) 
+    pm10 = sum(c(m0.4,m0.6,m0.85,m1.5,m2.5,m4.0,m7.5)) 
     )
 
-#Saving to a feather file so that other scripts can use prepared tibble. 
+#Saving to a feather file so that other scripts can use prepared tibble.
 write_feather(airmasterk,"airmasterk.feather")
