@@ -61,6 +61,21 @@ airmasterk2 <- airmasterk2 %>% rowwise() %>%
     pm10 = sum(c(totvol0.4,totvol0.6,totvol0.85,totvol1.5,totvol2.5,totvol4.0,totvol7.5)) / 1000000000000 * 1.65 *1000000 *1000
   )
 
+#pulls all the observations where the Flow isn't exactly one
+lowflow <- airmasterk2 %>%
+  filter(`Flow(lpm)` != 1)
+view(lowflow)
+
+#pulls all the observations where pm2.5 is negative
+negatives <- airmasterk2 %>%
+  filter(pm2.5 < 0)
+view(negatives)
+
+#pulls all the observations where pm2.5 is above 100
+highpm2.5 <- airmasterk2 %>%
+  filter(pm2.5 > 100)
+view(highpm2.5)
+
 
 #Saving to a feather file so that other scripts can use prepared tibble.
 write_feather(airmasterk2,"airmasterk2.feather")
