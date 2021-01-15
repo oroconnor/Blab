@@ -11,6 +11,21 @@ df <- read_csv(newdata)
 #change time strings to datetime type
 df<-mutate(df, Time= parse_date_time(Time,"mdYHM"))
 
+#filtering for negative values for counts, and values over 999,999,999
+df <- df %>% 
+  filter(
+    c0.3 >= 0 & c0.3 <= 999999999,
+    c0.5 >= 0 & c0.5 <= 999999999,
+    c0.7 >= 0 & c0.7 <= 999999999,
+    c1.0  >= 0 &  c1.0  <= 999999999,
+    c2.0 >= 0 & c2.0 <= 999999999,
+    c3.0 >= 0 & c3.0 <= 999999999,
+    c5.0 >= 0 & c5.0 <= 999999999,
+    c10.0 >= 0 & c10.0 <= 999999999,
+  )
+
+
+
 #using average diameters for each bin to get count totals by size
 airmasterk2 <- df %>%
   mutate(
@@ -21,8 +36,10 @@ airmasterk2 <- df %>%
     tot2.5count = c2.0 - c3.0, 
     tot4.0count = c3.0 - c5.0, 
     tot7.5count = c5.0 - c10.0,
-    tot20count = c10.0,
+    tot20count = c10.0
   )
+
+
 
 # Sphere volume constants. For each bin, we're calculating the amount of 
 #volume in one particle of the midpoint size of the bin. V = 4/3*pi*r^3
@@ -70,11 +87,21 @@ view(lowflow)
 negatives <- airmasterk2 %>%
   filter(pm2.5 < 0)
 view(negatives)
+write.csv(negatives, "negatives.csv")
 
 #pulls all the observations where pm2.5 is above 100
 highpm2.5 <- airmasterk2 %>%
   filter(pm2.5 > 100)
 view(highpm2.5)
+
+#adjusting for Flow(lpm)
+airmasterk2 <- airmasterk2 %>% 
+  mutate(
+    pm2.5 = pm2.5 * 'Flow(lpm)',
+    pm10 = pm10  * 'Flow(lpm)'
+  )
+
+
 
 
 #Saving to a feather file so that other scripts can use prepared tibble.
