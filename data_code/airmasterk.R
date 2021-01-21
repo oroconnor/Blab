@@ -4,30 +4,31 @@ library(ggplot2)
 library(feather)
 
 #This file should be the latest and greatest master data set from particle counter
-newdata <- "pcmaster_ktown_12-17.csv"
+newdata <- "Copy of pcmaster_ktown_1-18.csv"
 
 df <- read_csv(newdata)
 
 #change time strings to datetime type
 df<-mutate(df, Time= parse_date_time(Time,"mdYHM"))
 
-#filtering for negative values for counts, and values over 999,999,999
+#filtering for negative values for counts, and values over 900,000,000
 df <- df %>% 
   filter(
-    c0.3 >= 0 & c0.3 <= 999999999,
-    c0.5 >= 0 & c0.5 <= 999999999,
-    c0.7 >= 0 & c0.7 <= 999999999,
-    c1.0  >= 0 &  c1.0  <= 999999999,
-    c2.0 >= 0 & c2.0 <= 999999999,
-    c3.0 >= 0 & c3.0 <= 999999999,
-    c5.0 >= 0 & c5.0 <= 999999999,
-    c10.0 >= 0 & c10.0 <= 999999999,
+    c0.3 >= 0 & c0.3 <= 900000000,
+    c0.5 >= 0 & c0.5 <= 900000000,
+    c0.7 >= 0 & c0.7 <= 900000000,
+    c1.0 >= 0 & c1.0 <= 900000000,
+    c2.0 >= 0 & c2.0 <= 900000000,
+    c3.0 >= 0 & c3.0 <= 900000000,
+    c5.0 >= 0 & c5.0 <= 900000000,
+    c10.0 >= 0 & c10.0 <= 900000000,
+    Alarms == 0
   )
 
 
 
 #using average diameters for each bin to get count totals by size
-airmasterk2 <- df %>%
+airmasterk <- df %>%
   mutate(
     tot0.4count = c0.3 - c0.5, 
     tot0.6count = c0.5 - c0.7,
@@ -53,7 +54,7 @@ vol7.5 = (4/3) * pi * (7.5/2)^3
 vol20 = (4/3) * pi * (20/2)^3
 
 #calculating volumes
-airmasterk2 <- airmasterk2 %>%
+airmasterk <- airmasterk %>%
    mutate(
      totvol0.4 = (vol0.4*tot0.4count),
      totvol0.6 = (vol0.6*tot0.6count),
@@ -72,30 +73,15 @@ airmasterk2 <- airmasterk2 %>%
 #3) multiply by 1.65 to get the weight per cubic cm of particle in grams. 
 #4) Then multiply by 1000000 to convert mass in grams to micrograms
 #5) Convert the 1 lpm sampled to cubic meters (multiplying by 1000),
-airmasterk2 <- airmasterk2 %>% rowwise() %>%
+airmasterk <- airmasterk %>% rowwise() %>%
   mutate(
     pm2.5 = sum(c(totvol0.4,totvol0.6,totvol0.85,totvol1.5,totvol2.5)) / 1000000000000 * 1.65 *1000000 *1000,
     pm10 = sum(c(totvol0.4,totvol0.6,totvol0.85,totvol1.5,totvol2.5,totvol4.0,totvol7.5)) / 1000000000000 * 1.65 *1000000 *1000
   )
 
-#pulls all the observations where the Flow isn't exactly one
-lowflow <- airmasterk2 %>%
-  filter(`Flow(lpm)` != 1)
-view(lowflow)
-
-#pulls all the observations where pm2.5 is negative
-negatives <- airmasterk2 %>%
-  filter(pm2.5 < 0)
-view(negatives)
-write.csv(negatives, "negatives.csv")
-
-#pulls all the observations where pm2.5 is above 100
-highpm2.5 <- airmasterk2 %>%
-  filter(pm2.5 > 100)
-view(highpm2.5)
 
 #adjusting for Flow(lpm)
-airmasterk2 <- airmasterk2 %>% 
+airmasterk <- airmasterk %>% 
   mutate(
     pm2.5 = pm2.5 * 'Flow(lpm)',
     pm10 = pm10  * 'Flow(lpm)'
@@ -103,6 +89,5 @@ airmasterk2 <- airmasterk2 %>%
 
 
 
-
 #Saving to a feather file so that other scripts can use prepared tibble.
-write_feather(airmasterk2,"airmasterk2.feather")
+write_feather(airmasterk,"airmasterk.feather")
