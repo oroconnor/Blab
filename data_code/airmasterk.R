@@ -79,6 +79,35 @@ airmasterk <- airmasterk %>% rowwise() %>%
     pm10 = sum(c(totvol0.4,totvol0.6,totvol0.85,totvol1.5,totvol2.5,totvol4.0,totvol7.5)) / 1000000000000 * 1.65 *1000000 *1000
   )
 
+#calculating mass for individual bins too, with the same formula that we used for PM2.5 and PM10
+airmasterk <- airmasterk %>%
+  mutate(
+    mass0.4 =  totvol0.4 / 1000000000000 * 1.65 *1000000 *1000,
+    mass0.6 =  totvol0.6 / 1000000000000 * 1.65 *1000000 *1000,
+    mass0.85 =  totvol0.85 / 1000000000000 * 1.65 *1000000 *1000,
+    mass1.5 =  totvol1.5 / 1000000000000 * 1.65 *1000000 *1000,
+    mass2.5 =  totvol2.5 / 1000000000000 * 1.65 *1000000 *1000,
+    mass4.0 =  totvol4.0 / 1000000000000 * 1.65 *1000000 *1000,
+    mass7.5 =  totvol7.5 / 1000000000000 * 1.65 *1000000 *1000,
+    mass20 =  totvol20 / 1000000000000 * 1.65 *1000000 *1000
+  )
+
+
+
+# #pulls all the observations where the Flow isn't exactly one
+# lowflow <- airmasterk %>%
+#   filter(`Flow(lpm)` != 1)
+# view(lowflow)
+# 
+# #pulls all the observations where pm2.5 is negative into a dataframe
+# negatives <- airmasterk %>%
+#   filter(pm2.5 < 0)
+# view(negatives)
+# # 
+# #pulls all the observations where pm2.5 is above 100 into a dataframe
+# highpm2.5 <- airmasterk %>%
+#   filter(pm2.5 > 100)
+# view(highpm2.5)
 
 #adjusting for Flow(lpm)
 airmasterk <- airmasterk %>% 
@@ -86,6 +115,7 @@ airmasterk <- airmasterk %>%
     pm2.5 = pm2.5 * 'Flow(lpm)',
     pm10 = pm10  * 'Flow(lpm)'
   )
+
 
 
 
