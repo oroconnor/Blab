@@ -5,7 +5,7 @@ library(tidyverse)
 library(lubridate)
 library(ggplot2)
 library(feather)
-
+library(wesanderson)
 
 #reading in the file created by "airmasterk.R"
 airmasterk <- read_feather("airmasterk.feather")
@@ -26,6 +26,9 @@ ggplot(subset(gather(rainmarchk,`Particle Diameter (microns)`, Mass, mass0.4:mas
   labs(
     x = "Mar 12                            Mar 13                              Mar 14",
     y = "Mass - microns/cubic meter",
+    title = paste(
+      "Effect of Rain on Airborne Particulate Circulation"
+    ),
     subtitle = paste(
       "Rain Highlighted in Blue ")
   ) +
