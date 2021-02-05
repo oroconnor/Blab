@@ -2,6 +2,7 @@ library(tidyverse)
 library(lubridate)
 library(ggplot2)
 library(feather)
+library(wesanderson)
 
 #reading in the file created by "airmasterk.R"
 airmasterk <- read_feather("airmasterk.feather")
