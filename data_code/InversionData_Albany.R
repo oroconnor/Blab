@@ -159,6 +159,20 @@ ggplot(imasterk, aes(x=Time,y = pm2.5)) +
   theme(plot.title = element_text(hjust = 0.5)) +
   theme(plot.subtitle = element_text(hjust = 0.5))
 
+
+#boxplot
+
+ggplot(imasterk, aes(x=inversion, y=pm2.5, color=inversion)) +
+  geom_boxplot() +
+  labs(
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "with inversion labels from Albany"
+      
+  ))
+
 # below attempts to join full data set and impute inversion labels 
 amasterk <- full_join(airmasterk, df2) 
 
@@ -205,6 +219,8 @@ ggplot(amasterk, aes(x=hourdate,y = hourly_pm2.5)) +
   theme_classic() +
   theme(plot.title = element_text(hjust = 0.5)) +
   theme(plot.subtitle = element_text(hjust = 0.5))
+
+
 
 ###########################
 #scrap pieces from trying different ways to fill values backward/forward
