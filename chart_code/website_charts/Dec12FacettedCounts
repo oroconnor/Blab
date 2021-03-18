@@ -1,12 +1,12 @@
-#Whole Year Counts  .3-10 Facetted 
-ggplot(transform(gather(airmasterk,Particle_Size, Counts, c0.3:c10.0),Particle_Size = factor(Particle_Size, levels = c("c0.3","c0.5","c0.7","c1.0","c2.0","c3.0","c5.0","c10.0"))),
+#Dec 12 Counts  .3-10 Facetted 
+ggplot(subset(transform(gather(airmasterk,Particle_Size, Counts, c0.3:c10.0),Particle_Size = factor(Particle_Size, levels = c("c0.3","c0.5","c0.7","c1.0","c2.0","c3.0","c5.0","c10.0"))), month(Time) == 12 & day(Time) > 10 & day(Time) < 14),
        aes(Time,Counts, color = Particle_Size)) +
   geom_point(size= .3, alpha =.4) +
   labs(
     x = NULL,
     y = "Particle Counts",
     title = paste(
-      "Particulate Matter Counts - 2020"
+      "Particulate Matter Counts: December 2020"
     ),
     subtitle = paste(
       "sizes 0.3 - 10.0")
