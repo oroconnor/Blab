@@ -1,0 +1,338 @@
+---
+title: "PurpleAir Notebook"
+output: html_notebook
+---
+
+Load in the packages that we're using:
+```{r}
+library(tidyverse)
+library(lubridate)
+library(openair)
+library(feather)
+
+```
+
+Read in the csv file. This file has already been downloaded and put into the appropriate folder with the correct name. The user needs to select whether this sensor is monitoring outside or inside:
+```{r}
+
+# Is the sensor monitoring outside or indoors
+sensor_loc = 1 #Please choose 1 for outside or 0 for indoors - USER INPUT NEEDED
+name_file = "april2021.csv" #edit with correct month/year. For this sensor, only affects how data is saved.
+
+name_file1 <- "Bard College_ Stevenson Library (outside) (42.023029 -73.903959) Primary Real Time 04_01_2021 04_30_2021.csv" #This is what you should edit each month to change the name of the file
+
+name_file2 <- "Bard College_ Stevenson Library B (undefined) (42.023029 -73.903959) Primary Real Time 04_01_2021 04_30_2021.csv"
+
+name_file3 <- "Bard College_ Stevenson Library (outside) (42.023029 -73.903959) Secondary Real Time 04_01_2021 04_30_2021.csv"
+
+name_file4 <- "Bard College_ Stevenson Library B (undefined) (42.023029 -73.903959) Secondary Real Time 04_01_2021 04_30_2021.csv"
+  
+file1 <- read_csv(name_file1)
+file2 <- read_csv(name_file2)
+file3 <- read_csv(name_file3)
+file4 <- read_csv(name_file4)
+
+
+
+
+```
+
+Merge by "entry_id". Each file has a timestamp column. However, the timestamps to not line up exactly with the entry_id. We are assuming that the entry_id is the unique ID for the oberservations happening at the same momemnt, but this should be confirmed:
+```{r}
+
+purple_air <- full_join(file1, file2, by = "entry_id", suffix = c(".primA", ".primB"))
+purple_air <- full_join(purple_air, file3, by = "entry_id")
+purple_air <- full_join(purple_air, file4, by = "entry_id", suffix = c(".secA", ".secB"))
+
+
+```
+
+```{r}
+purple_air <- purple_air %>%
+  mutate(
+    created_at.primA = as_datetime(created_at.primA),
+    created_at.primB = as_datetime(created_at.primB),
+    created_at.secA = as_datetime(created_at.secA),
+    created_at.secB = as_datetime(created_at.secB)
+  )
+```
+
+
+
+Find the max difference between time stamps of the different files for the unique entry_id:
+
+```{r}
+
+# Work in progress to do this in a simpler way
+a <- abs(purple_air$created_at.primA - purple_air$created_at.primB)
+b <- abs(purple_air$created_at.primA - purple_air$created_at.secA)
+c <- abs(purple_air$created_at.primA - purple_air$created_at.secB)
+d <- abs(purple_air$created_at.primB - purple_air$created_at.secA)
+e <- abs(purple_air$created_at.primB - purple_air$created_at.secB)
+f <- abs(purple_air$created_at.secA - purple_air$created_at.secB)
+bigdif <- c(a,b,c,d,e,f)
+max(a,na.rm = TRUE)
+max(b,na.rm = TRUE)
+max(c,na.rm = TRUE)
+max(d,na.rm = TRUE)
+max(e,na.rm = TRUE)
+max(f,na.rm = TRUE)
+  
+paste("Max for this dataset:")
+max(bigdif, na.rm = TRUE)
+```
+purple_air$created_at.secA)), abs(as.numeric(purple_air$created_at.primA - purple_air$created_at.secB)), abs(as.numeric(purple_air$created_at.primB - purple_air$created_at.secA)), abs(as.numeric(purple_air$created_at.primB - purple_air$created_at.secB)), abs(as.numeric(purple_air$created_at.secA - purple_air$created_at.secB))
+
+
+
+Drop columns that we are not storing in our cleaned up file. Then rename columns according to lab conventions. Then reorder the dataframe to be in chronalogical order. Finally, round the seconds of timestamp down to zero for ease in merging this data with other dataframes:
+
+```{r}
+purple_air <- purple_air %>% 
+  select(-c(UptimeMinutes.primA, X11.primA, UptimeMinutes.primB, IAQ, X11.primB, X11.secA, X11.secB,created_at.primB,created_at.secA,created_at.secB, )) %>% 
+  rename( # Rename columns according to lab conventions
+    time = created_at.primA
+    # Others to rename? I would prefer to have variable names that didn't require `backticks`
+  )
+```
+
+Dealing with time issues:
+```{r}
+# Round all the times down to create a timestamp every other minute
+purple_air$time <- floor_date(purple_air$time, "2 minutes")
+
+#convert from UTC to EST
+purple_air$time <- with_tz(purple_air$time, tz = "EST")
+
+#convert Temp F to C
+purple_air$temp_C <- (purple_air$Temperature_F - 32) / (5/9)
+
+```
+
+Give yourself a quick look at the data before any cleaning happens:
+```{r}
+#summary plot
+s <- purple_air %>%
+  select(
+    -c(entry_id,ADC,RSSI_dbm)
+  ) %>%
+  rename(
+    date = time
+  ) %>%
+    filter(
+      !is.na(date)
+  ) 
+  
+summaryPlot(s,period = "months")
+```
+Look at the same table but just selecting a few variables to get a better look:
+
+```{r}
+#summary plot
+purple_air %>%
+  select(
+    c(time,`PM2.5_CF1_ug/m3.primA`,`PM10.0_CF1_ug/m3.primA`,`PM2.5_CF1_ug/m3.primB`,`PM10.0_CF1_ug/m3.primB`,`PM2.5_ATM_ug/m3.primA`,`PM2.5_ATM_ug/m3.primB`)
+  ) %>%
+  rename(
+    date = time
+  ) %>%
+    filter(
+      !is.na(date)
+  ) %>%
+  summaryPlot(period = "months")
+```
+
+And a quick look at some summary statistics for the different variables before any cleaning, scanning to see if the ranges seem in the realm of the possible:
+```{r}
+summary(purple_air)
+```
+
+
+
+
+Clean the variables by dropping rows that have values outside of measurement range (another alternative would be to preserve row but change value to NA):
+
+```{r}
+# Marco: need rules confirmed
+purple_airc <- purple_air %>% 
+  filter(
+     temp_C >= -273.15 & temp_C <= 200,
+     `Humidity_%` >= 0 & `Humidity_%` <= 100,
+     Pressure_hpa >= 0 & Pressure_hpa <= 2000,
+     `PM1.0_CF1_ug/m3.primA` >= 0 & `PM1.0_CF1_ug/m3.primA` <= 9999,
+     `PM2.5_CF1_ug/m3.primA` >= 0 & `PM2.5_CF1_ug/m3.primA` <= 9999,
+     `PM10.0_CF1_ug/m3.primA` >= 0 & `PM10.0_CF1_ug/m3.primA` <= 9999,
+      `PM2.5_ATM_ug/m3.primA` >= 0 & `PM2.5_ATM_ug/m3.primA` <= 9999,
+      `PM1.0_ATM_ug/m3.secA` >= 0 & `PM1.0_ATM_ug/m3.secA` <= 9999,
+     `PM10_ATM_ug/m3.secA` >= 0 & `PM10_ATM_ug/m3.secA` <= 9999,
+      `PM1.0_CF1_ug/m3.primB` >= 0 & `PM1.0_CF1_ug/m3.primB` <= 9999,
+     `PM2.5_CF1_ug/m3.primB` >= 0 & `PM2.5_CF1_ug/m3.primB` <= 9999,
+     `PM10.0_CF1_ug/m3.primB` >= 0 & `PM10.0_CF1_ug/m3.primB` <= 9999,
+     `PM2.5_ATM_ug/m3.primB` >= 0 & `PM2.5_ATM_ug/m3.primB` <= 9999,
+      `PM1.0_ATM_ug/m3.secB` >= 0 & `PM1.0_ATM_ug/m3.secB` <= 9999,
+     `PM10_ATM_ug/m3.secB` >= 0 & `PM10_ATM_ug/m3.secB` <= 9999,
+  )
+
+```
+
+
+```{r}
+glimpse(purple_airc)
+```
+
+
+Number of rows dropped and % of rows dropped by cleaning:
+```{r}
+paste("Number of rows dropped:", nrow(purple_air) - nrow(purple_airc))
+p <- (nrow(purple_air) - nrow(purple_airc))/nrow(purple_air)
+paste("% of rows dropped:", p)
+```
+
+
+Adding averaged columns for PM from two sensors:
+
+```{r}
+
+if (sensor_loc == 1){
+  purple_airc$`PM1.0_ATM_ug/m3_avg` <- (purple_airc$`PM1.0_ATM_ug/m3.secA`+purple_airc$`PM1.0_ATM_ug/m3.secB`)/2
+  purple_airc$`PM2.5_ATM_ug/m3_avg` <- (purple_airc$`PM2.5_ATM_ug/m3.primA`+purple_airc$`PM2.5_ATM_ug/m3.primB`)/2
+  purple_airc$`PM10_ATM_ug/m3_avg` <- (purple_airc$`PM10_ATM_ug/m3.secA`+purple_airc$`PM10_ATM_ug/m3.secB`)/2
+} else{
+  purple_airc$`PM1.0_CF1_ug/m3_avg` <- (purple_airc$`PM1.0_CF1_ug/m3.primA`+purple_airc$`PM1.0_CF1_ug/m3.primB`)/2
+  purple_airc$`PM2.5_CF1_ug/m3_avg` <- (purple_airc$`PM2.5_CF1_ug/m3.primA`+purple_airc$`PM2.5_CF1_ug/m3.primB`)/2
+  purple_airc$`PM10_CF1_ug/m3_avg` <- (purple_airc$`PM10_CF1_ug/m3.primA`+purple_airc$`PM10_CF1_ug/m3.primB`)/2
+  }
+
+
+```
+Reorder Columns for use of user:
+
+```{r}
+if (sensor_loc == 1){
+purple_airc <- purple_airc %>% 
+  relocate(
+    time,
+    entry_id,
+    temp_C,
+    `Humidity_%`,
+    Pressure_hpa,
+    `PM1.0_ATM_ug/m3_avg`,
+    `PM2.5_ATM_ug/m3_avg`,
+    `PM10_ATM_ug/m3_avg`,
+    
+    `PM1.0_CF1_ug/m3.primA`,
+    `PM2.5_CF1_ug/m3.primA`,
+    `PM10.0_CF1_ug/m3.primA`,
+    `PM1.0_ATM_ug/m3.secA`,
+    `PM2.5_ATM_ug/m3.primA`,
+    `PM10_ATM_ug/m3.secA`,
+    
+    `PM1.0_CF1_ug/m3.primB`,
+    `PM2.5_CF1_ug/m3.primB`,
+    `PM10.0_CF1_ug/m3.primB`,
+    `PM1.0_ATM_ug/m3.secB`,
+    `PM2.5_ATM_ug/m3.primB`,
+    `PM10_ATM_ug/m3.secB`,
+    
+    `>=0.3um/dl.secA`,
+    `>=0.5um/dl.secA`,
+    `>1.0um/dl.secA`,
+    `>=2.5um/dl.secA`,
+    `>=5.0um/dl.secA`,
+    `>=10.0um/dl.secA`,
+    
+    `>=0.3um/dl.secB`,
+    `>=0.5um/dl.secB`,
+    `>1.0um/dl.secB`,
+    `>=2.5um/dl.secB`,
+    `>=5.0um/dl.secB`,
+    `>=10.0um/dl.secB`,
+    
+    RSSI_dbm,
+    ADC,
+    Temperature_F,
+  )
+} else {
+  purple_airc <- purple_airc %>% 
+  relocate(
+    time,
+    entry_id,
+    Temperature_F,
+    `Humidity_%`,
+    Pressure_hpa,
+    `PM1.0_CF1_ug/m3_avg`,
+    `PM2.5_CF1_ug/m3_avg`,
+    `PM10_CF1_ug/m3_avg`,
+    
+    `PM1.0_CF1_ug/m3.primA`,
+    `PM2.5_CF1_ug/m3.primA`,
+    `PM10.0_CF1_ug/m3.primA`,
+    `PM1.0_ATM_ug/m3.secA`,
+    `PM2.5_ATM_ug/m3.primA`,
+    `PM10_ATM_ug/m3.secA`,
+    
+    `PM1.0_CF1_ug/m3.primB`,
+    `PM2.5_CF1_ug/m3.primB`,
+    `PM10.0_CF1_ug/m3.primB`,
+    `PM1.0_ATM_ug/m3.secB`,
+    `PM2.5_ATM_ug/m3.primB`,
+    `PM10_ATM_ug/m3.secB`,
+    
+    `>=0.3um/dl.secA`,
+    `>=0.5um/dl.secA`,
+    `>1.0um/dl.secA`,
+    `>=2.5um/dl.secA`,
+    `>=5.0um/dl.secA`,
+    `>=10.0um/dl.secA`,
+    
+    `>=0.3um/dl.secB`,
+    `>=0.5um/dl.secB`,
+    `>1.0um/dl.secB`,
+    `>=2.5um/dl.secB`,
+    `>=5.0um/dl.secB`,
+    `>=10.0um/dl.secB`,
+    
+    RSSI_dbm,
+    ADC
+  )
+}
+
+
+
+```
+Isolate the top and bottom .05% in order to scan values to confirm that even the extreme values don't have measurement errors causing issues:
+```{r}
+# First pm2.5
+lower_bound <- quantile(purple_airc$`PM2.5_ATM_ug/m3_avg`, 0.0005)
+upper_bound <- quantile(purple_airc$`PM2.5_ATM_ug/m3_avg`, 0.9995)
+
+outlier_ind <- which((purple_airc$`PM2.5_ATM_ug/m3_avg` < lower_bound) | (purple_airc$`PM2.5_ATM_ug/m3_avg` > upper_bound))
+
+purple_airc[outlier_ind, ]
+```
+```{r}
+# Then pm10
+lower_bound <- quantile(purple_airc$`PM10_ATM_ug/m3_avg`, 0.0005)
+upper_bound <- quantile(purple_airc$`PM10_ATM_ug/m3_avg`, 0.9995)
+
+outlier_ind <- which((purple_airc$`PM10_ATM_ug/m3_avg` < lower_bound) | (purple_airc$`PM10_ATM_ug/m3_avg` > upper_bound))
+
+purple_airc[outlier_ind, ]
+```
+
+And finally export the clean csv file to the designated storage folder. Right now I have it exporting to a csv file. You could consider writing to a feather file format as well:
+
+
+```{r}
+# Take the orginal file name and insert "clean" label in file name
+path_name <- str_sub(name_file,1,nchar(name_file)-4) %>%
+  paste("_clean.csv", sep = "")
+
+write_csv(purple_airc, file = path_name)
+
+#write feather file
+feather_name <- str_sub(name_file,1,nchar(name_file)-4) %>%
+  paste("_clean.feather", sep = "")
+write_feather(purple_airc, feather_name)
+
+```

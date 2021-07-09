@@ -1,0 +1,244 @@
+---
+title: "QuantAQ Visuals"
+output: html_notebook
+---
+
+
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(openair)
+library(ggplot2)
+library(feather)
+library(patchwork)
+```
+
+
+
+```{r}
+quantdf <- read_csv("AMNC_QAQ_April_clean.csv")
+
+#quantfeath <- read_feather("AMNC_QAQ_April_clean.feather")
+```
+
+
+
+
+```{r}
+
+p1 <- ggplot(quantdf, aes(time,y)) +
+        geom_point(aes(y = pm25), size= .3, color = "red", alpha =.4) +
+        labs(
+          x = NULL,
+          y = expression(Mass - (μg/~m^3)),
+          title = paste(
+            "Particulate Matter"
+          ),
+            subtitle = paste("PM2.5")
+          ) +
+        theme_classic()+
+        theme(
+          axis.text.x=element_text(angle=60, hjust=1),
+          plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5), 
+          text = element_text(family = "Helvetica")
+        ) 
+
+p2 <- ggplot(quantdf, aes(time,y)) +
+          geom_point(aes(y = pm1), size= .3, color = "blue", alpha =.4) +
+          labs(
+            x = NULL,
+            y = expression(Mass - (μg/~m^3)),
+            subtitle = paste("PM1.0")
+          ) +
+          theme_classic() +
+          theme(
+          axis.text.x=element_text(angle=60, hjust=1),
+          plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5), 
+          text = element_text(family = "Helvetica")
+        ) 
+
+
+p3 <- ggplot(quantdf, aes(time,y)) +
+        geom_point(aes(y = pm10), size= .3, color = "green", alpha =.4) +
+          labs(
+          x = NULL,
+          y = expression(Mass - (μg/~m^3)),
+            subtitle = paste("PM10")
+          ) +
+        theme_classic() +
+          theme(
+          axis.text.x=element_text(angle=60, hjust=1),
+          plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5), 
+          text = element_text(family = "Helvetica")
+        ) 
+
+
+p1 / p2 / p3 
+#ggsave("PMavg.pdf", width = 6, height = 6)
+```
+
+
+
+
+```{r}
+
+f <- gather(quantdf, "Particle_Size", "Counts", neph_bin0:neph_bin5) 
+
+
+f$Particle_Size <- factor(f$Particle_Size, levels = 
+c("neph_bin0","neph_bin1","neph_bin2","neph_bin3","neph_bin4","neph_bin5"))
+ 
+# bins Facetted 
+ggplot(f,aes(time, Counts, color = Particle_Size)) +
+  geom_point(size= .3, alpha =.4) +
+  labs(
+    x = NULL,
+    y = "Particle Counts",
+    title = paste(
+      "Particulate Matter Counts"
+    ),
+    subtitle = paste(
+      "bins 0-5")
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica"),
+    legend.position = "none"
+  ) +
+  facet_wrap(~Particle_Size, ncol = 3, scales = "free")
+
+```
+
+Boxplots
+
+
+```{r}
+
+#selected boxplots
+b1 <- ggplot(purpdf,aes(x="",y=temp_C))+geom_boxplot()
+b2 <- ggplot(purpdf,aes(x="",y=`Humidity_%`))+geom_boxplot()
+b3 <- ggplot(purpdf,aes(x="",y=Pressure_hpa))+geom_boxplot()
+b4 <- ggplot(purpdf,aes(x="",y=`PM1.0_ATM_ug/m3_avg`))+geom_boxplot()
+b5 <- ggplot(purpdf,aes(x="",y=`PM2.5_ATM_ug/m3_avg`))+geom_boxplot()
+b6 <- ggplot(purpdf,aes(x="",y=`PM10_ATM_ug/m3_avg`))+geom_boxplot()
+b7 <- ggplot(purpdf,aes(x="",y=`>=0.3um/dl.secA`))+geom_boxplot()
+b8 <- ggplot(purpdf,aes(x="",y=`>=0.5um/dl.secA`))+geom_boxplot()
+b9 <- ggplot(purpdf,aes(x="",y=`>1.0um/dl.secA`))+geom_boxplot()
+b10 <- ggplot(purpdf,aes(x="",y=`>=2.5um/dl.secA`))+geom_boxplot()
+b11 <- ggplot(purpdf,aes(x="",y=`>=5.0um/dl.secA` ))+geom_boxplot()
+b12 <- ggplot(purpdf,aes(x="",y=`>=10.0um/dl.secA`))+geom_boxplot()
+
+
+b1 + b2 + b3 + b4 + b5 + b6 + b7 + b8 + b9 + b10 + b11 + b12 +
+  plot_layout(ncol = 4) 
+
+```
+
+
+
+Highlighting Average PM2.5:
+
+```{r}
+#PM2.5
+ggplot(quantdf,
+       aes(time,y)) +
+  geom_point(aes(y = pm25), size= .3, color = "red", alpha =.4) +
+  scale_x_datetime(date_breaks = "4 days", date_labels = "%b %d") +
+  labs(
+    x = NULL,
+    y = expression(Mass - (μg/~m^3)),
+    subtitle = paste(
+      "PM2.5 - Raw Data"
+    )) +
+  theme_classic() +
+  theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+    )
+
+
+
+```
+
+
+```{r}
+#creating dataframe w/ hourly averages of PM2.5 and PM10
+hquantdf <- quantdf %>%
+  mutate(hour = hour(time), date = as_date(time)
+  ) %>%
+  group_by(date) %>% #group by the date
+  summarise(daily_mean = mean(pm25), #daily pm2.5 mean
+            sdpm2.5 = sd(pm25), #standard deviation of daily pm2.5
+            sepm2.5 = (sdpm2.5)/sqrt(1440), #standard error of daily pm2.5
+            daily_mean10 = mean(pm10), #daily pm10 mean
+  ) %>%
+  na.omit() %>%
+  mutate(
+    YMD = ymd(date)
+  )
+
+
+#plot of daily mean PM2.5
+ggplot(data = hquantdf,
+       aes(x = YMD,y = daily_mean)) +
+  geom_point(aes(y = daily_mean), color = "red", size= 2) +
+  geom_line(aes(y = daily_mean), linetype = 2) +
+  #geom_errorbar(aes(ymin = daily_mean - sepm2.5, ymax = daily_mean + sepm2.5), size = .2, width = 1,alpha = .3) +
+  #geom_smooth(se = FALSE) +
+  geom_hline(yintercept=35, color="orange", lty=2) +
+  #annotate("text", x= 10, y = 37, label = "EPA 24-hr Avg. Threshold", size = 3) +
+  #geom_line(aes(y = daily_mean), color = "red") +
+  scale_x_date(date_breaks = "days", date_labels = "%b %d") +
+  labs(
+    y = expression(Mass - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Particulate Matter"
+    ),
+    subtitle = paste(
+      "PM2.5 Daily Averages"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r}
+
+#plot of daily mean PM10
+ggplot(data = hquantdf,
+       aes(x = YMD,y = daily_mean10)) +
+  geom_point(aes(y = daily_mean10), color = "red", size= 2) +
+  geom_line(aes(y = daily_mean10), linetype = 2) +
+  #geom_errorbar(aes(ymin = daily_mean - sepm2.5, ymax = daily_mean + sepm2.5), size = .2, width = 1,alpha = .3) +
+  #geom_smooth(se = FALSE) +
+  #geom_hline(yintercept=35, color="orange", lty=2) +
+  #annotate("text", x= 10, y = 37, label = "EPA 24-hr Avg. Threshold", size = 3) +
+  #geom_line(aes(y = daily_mean), color = "red") +
+  scale_x_date(date_breaks = "days", date_labels = "%b %d") +
+  labs(
+    y = expression(Mass - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Particulate Matter"
+    ),
+    subtitle = paste(
+      "PM10 Daily Averages"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
