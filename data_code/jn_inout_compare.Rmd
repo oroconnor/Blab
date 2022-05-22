@@ -1,0 +1,287 @@
+---
+title: "KAQI - House 1 - Indoor vs Outdoor"
+author: "Owen O'Connor"
+date: "Nov 1 2021"
+output: word_document
+---
+
+## KAQI - House 1 - Indoor vs Outdoor
+### Purpleair and Eggs
+
+Julie Noble:  House 1
+
+Loading needed packages, reading in csv files, and taking a peek at what was loaded in:
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(feather)
+library(wesanderson)
+library(PerformanceAnalytics)
+library(openair)
+
+
+jn_in_2020 <- read_csv("jn_in_2020.csv",col_types = "Tcdddddddddddddddddddd")
+jn_out_2020 <- read_csv("jn_out_2020.csv",col_types = "Tcdddddddddddddddddddd")
+
+glimpse(jn_in_2020) 
+glimpse(jn_out_2020) 
+
+
+```
+Renaming variables, selecting certain variables we want, and doing a basic plot to check the period that the indoor data covers:
+
+```{r}
+
+jn_in_2020 <- jn_in_2020 %>% 
+    rename(
+    temp = `temperature[degC]`,
+    RH = `humidity[percent]`,
+    pressure = `pressure[Pa]`,
+    pm10p0 = `pm10p0[ug/m^3]`,
+    pm2p5 = `pm2p5[ug/m^3]`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) %>%
+  filter(
+    time >= ymd_hms("2020-04-08 00:00:00")
+  )
+
+jn_in_2020 %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+```
+Basic time series plot to get a better sense of indoor PM2.5 measurements:
+```{r}
+#Time Series plot
+ggplot(jn_in_2020, aes(time,y)) +
+  geom_point(aes(y = pm2p5), size= .3, color = "red", alpha =.4) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = "House 1 PM2.5 Readings - Indoors",
+    subtitle = paste(
+      ""
+    )) +
+theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+    ) 
+
+#scale_y_continuous(limits = c(0,50))
+```
+Doing the same for outdoor data:
+```{r}
+
+jn_out_2020 <- jn_out_2020 %>% 
+    rename(
+    temp = `temperature[degC]`,
+    RH = `humidity[percent]`,
+    pressure = `pressure[Pa]`,
+    pm10p0 = `pm10p0[ug/m^3]`,
+    pm2p5 = `pm2p5[ug/m^3]`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) %>%
+  filter(
+    time >= ymd_hms("2020-04-08 00:00:00")
+  )
+
+jn_out_2020 %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+```
+```{r}
+#Time Series plot
+ggplot(jn_out_2020, aes(time,y)) +
+  geom_point(aes(y = pm2p5), size= .3, color = "red", alpha =.4) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = "House 1 PM2.5 Readings - Outdoors",
+    subtitle = paste(
+      ""
+    )) +
+theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+    ) 
+
+#scale_y_continuous(limits = c(0,50))
+```
+
+
+
+### Combine and Compare
+We condense measurements to hourly averages:
+```{r}
+
+# Make all indoor sets hourly averages
+jn_in_2020 <- jn_in_2020 %>%
+  group_by(time = cut(time, breaks="1 hour")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = ymd_hms(time)
+  )
+
+
+jn_out_2020 <- jn_out_2020 %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = ymd_hms(time)
+  )
+
+
+
+
+```
+Then we join the two datasets by the time:
+```{r}
+inout_2020 <- inner_join(jn_in_2020, jn_out_2020,by="time", suffix = c(".in",".out")) 
+
+
+
+
+```
+
+Plots comparing indoor and outdoor measurements for House 1:
+```{r}
+
+
+#preparing data for plots
+
+ binout_2020 <- inout_2020 %>%
+  rename(
+    Indoor = pm2p5.in,
+    Outdoor = pm2p5.out
+  ) %>%
+gather(`Sensor`, pm2.5,c(Indoor, Outdoor))
+
+ggplot(binout_2020, aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6, alpha =.4) +
+  # geom_point(aes(y = pm2p5.in), size = .6, alpha =.4, color = "red") +
+  # geom_point(aes(y = pm2p5.out), size = .6, alpha =.4, color = "blue") +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = "House 1 Indoor and Outdoor Particulate Matter",
+    subtitle = paste(
+      ""
+    )) +
+theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+    )
+#scale_y_continuous(limits = c(0,50))
+```
+
+Zooming in on smaller periods:
+
+Nov. 2 - Nov. 9 2021
+```{r}
+
+ggplot(subset(binout_2020, month(time) == 11 & day(time) > 1 & day(time) < 10), aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6) +
+  #geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = "House 1 Indoor and Outdoor Particulate Matter",
+    subtitle = paste(
+      ""
+    )) +
+theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+    )
+```
+Nov. 11 - Nov. 19 2021
+```{r}
+
+ggplot(subset(binout_2020, month(time) == 11 & day(time) > 10 & day(time) < 20), aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = "House 1 Indoor and Outdoor Particulate Matter",
+    subtitle = paste(
+      ""
+    )) +
+theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+    )
+```
+Nov. 21 - Nov. 29 2021
+
+```{r}
+
+ggplot(subset(binout_2020, month(time) == 11 & day(time) > 20 & day(time) < 30), aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6) +
+  geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = "House 1 Indoor and Outdoor Particulate Matter",
+    subtitle = paste(
+      ""
+    )) +
+theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+    )
+```
+
+
+
+Let's do a correlation plot:
+
+```{r}
+
+inout_2020 %>% 
+  select(
+    -time
+  ) %>%
+chart.Correlation()
+
+
+```
+
+While the indoor and outdoor PM2.5 are correlated, the correlation is pretty weak. 

@@ -1,0 +1,133 @@
+---
+title: "Egg_filemaker"
+author: "Owen"
+date: "12/3/2021"
+output: html_document
+---
+## KAQI - Outdoor Sensors - 2020
+### Eggs
+
+
+Key:
+Julie Noble:  House 1
+Lorraine:     House 2
+Marco Spodek: House 3
+
+Loading needed packages, reading in csv files, and taking a peek at what was loaded in:
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(feather)
+library(wesanderson)
+library(PerformanceAnalytics)
+library(openair)
+
+
+jn_out_2020 <- read_csv("jn_out_2020.csv",col_types = "Tcdddddddddddddddddddd")
+lorraine_out_2020 <- read_csv("lorraine_out_2020.csv",col_types = "Tcdddddddddddddddddddd")
+
+jn_in_2020 <- read_csv("jn_in_2020.csv",col_types = "Tcdddddddddddddddddddd")
+lorraine_in_2020 <- read_csv("lorraine_in_2020.csv",col_types = "Tcdddddddddddddddddddd")
+ms_in_2020 <- read_csv("ms_in_2020.csv",col_types = "Tcdddddddddddddddddddd")
+
+
+
+jn_in_2020 <- jn_in_2020 %>% 
+    rename(
+    temp = `temperature[degC]`,
+    RH = `humidity[percent]`,
+    pressure = `pressure[Pa]`,
+    pm10p0 = `pm10p0[ug/m^3]`,
+    pm2p5 = `pm2p5[ug/m^3]`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) %>%
+  filter(
+    time >= ymd_hms("2020-04-08 00:00:00")
+  )
+
+lorraine_in_2020 <- lorraine_in_2020 %>% 
+    rename(
+    temp = `temperature[degC]`,
+    RH = `humidity[percent]`,
+    pressure = `pressure[Pa]`,
+    pm10p0 = `pm10p0[ug/m^3]`,
+    pm2p5 = `pm2p5[ug/m^3]`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) %>%
+  filter(
+    time >= ymd_hms("2020-03-27 00:00:00")
+  )
+
+ms_in_2020 <- ms_in_2020 %>% 
+    rename(
+    temp.house3in = `temperature[degC]`,
+    RH.house3in = `humidity[percent]`,
+    pressure.house3in = `pressure[Pa]`,
+    pm10p0.house3in = `pm10p0[ug/m^3]`,
+    pm2p5.house3in = `pm2p5[ug/m^3]`
+  ) %>%
+  select(
+    time, temp.house3in, RH.house3in, pressure.house3in, pm10p0.house3in,  pm2p5.house3in
+  ) %>%
+  filter(
+    time >= ymd_hms("2020-03-25 00:00:00")
+  )
+
+jn_out_2020 <- jn_out_2020 %>% 
+    rename(
+    temp = `temperature[degC]`,
+    RH = `humidity[percent]`,
+    pressure = `pressure[Pa]`,
+    pm10p0 = `pm10p0[ug/m^3]`,
+    pm2p5 = `pm2p5[ug/m^3]`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) %>%
+  filter(
+    time >= ymd_hms("2020-04-08 00:00:00")
+  )
+
+
+lorraine_out_2020 <- lorraine_out_2020 %>% 
+    rename(
+    temp = `temperature[degC]`,
+    RH = `humidity[percent]`,
+    pressure = `pressure[Pa]`,
+    pm10p0 = `pm10p0[ug/m^3]`,
+    pm2p5 = `pm2p5[ug/m^3]`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) %>%
+  filter(
+    time >= ymd_hms("2020-03-27 00:00:00")
+  )
+
+```
+
+
+
+Joining all three... full join:
+
+```{r}
+
+
+out_2020 <- full_join(jn_out_2020, lorraine_out_2020, by = "time", suffix = c(".house1out",".house2out"))
+
+in_2020 <- full_join(jn_in_2020, lorraine_in_2020, by = "time", suffix = c(".house1in",".house2in")) %>%
+  full_join(ms_in_2020,by="time")
+
+full_2020 <- full_join(out_2020, in_2020, by = "time")
+
+```
+
+
+```{r}
+write_csv(full_2020, "big_egg.csv")
+```
