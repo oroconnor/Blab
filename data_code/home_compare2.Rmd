@@ -1,0 +1,496 @@
+---
+title: "KAQI - Outdoor Sensors - Spring 2021"
+author: "Owen O'Connor"
+date: "Nov 1 2021"
+output: word_document
+---
+
+## KAQI - Outdoor Sensors - Spring 2021
+### Purpleair and Eggs
+
+Julie Noble:  House 1 - Roosevelt Park
+Lorraine:     House 2 - Midtown Rondout
+LB:           House 4 - Uptown
+VL:           House 5 - Ponckhockie
+AMNC:         AMNC
+
+First the eggs...
+Loading needed packages, reading in csv files, and taking a peek at what was loaded in:
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(feather)
+library(wesanderson)
+library(PerformanceAnalytics)
+library(openair)
+
+
+jn_out <- read_csv("jn_out.csv",col_types = "Tcdddddddddddddddddddd")
+lorraine_out <- read_csv("lorraine_out.csv",col_types = "Tcdddddddddddddddddddd")
+#adding in AMNC
+AMNC_out <- read_csv("andyspring_compare.csv")
+
+glimpse(jn_out) 
+glimpse(lorraine_out) 
+```
+Renaming variables, selecting certain variables we want, and doing a basic plot to check the period that the data covers:
+
+```{r}
+
+jn_out <- jn_out %>% 
+    rename(
+    temp = `temperature[degC]`,
+    RH = `humidity[percent]`,
+    pressure = `pressure[Pa]`,
+    pm10p0 = `pm10p0[ug/m^3]`,
+    pm2p5 = `pm2p5[ug/m^3]`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) 
+
+jn_out %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+```
+```{r}
+#what's the deal with the units on the variables for this sensor?
+lorraine_out <- lorraine_out %>% 
+    rename(
+    temp = `temperature[n/a]`,
+    RH = `humidity[n/a]`,
+    pressure = `pressure[n/a]`,
+    pm10p0 = `pm10p0[n/a]`,
+    pm2p5 = `pm2p5[n/a]`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) 
+
+lorraine_out %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+```
+
+
+Basic time series plot to get a better sense of each house's PM2.5 measurements:
+
+```{r}
+#Time Series plot
+ggplot(jn_out, aes(time,y)) +
+  geom_point(aes(y = pm2p5), size= .3, color = "red", alpha =.4) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = "House 1 PM2.5",
+    subtitle = paste(
+      "Selection from Spring 2021"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5))
+#scale_y_continuous(limits = c(0,50))
+```
+```{r}
+#Time Series plot
+ggplot(lorraine_out, aes(time,y)) +
+  geom_point(aes(y = pm2p5), size= .3, color = "blue", alpha =.4) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+     title = "House 2 PM2.5",
+    subtitle = paste(
+      "Selection from Spring 2021"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5))
+#scale_y_continuous(limits = c(0,50))
+```
+
+
+
+Next we do the same steps with the purpleair houses:
+
+
+```{r}
+
+#lb_in <- read_feather("LB_In_C_clean.feather")
+lb_out <- read_feather("LB_Out_C_clean.feather")
+#vl_in <- read_feather("VL_In_C_clean.feather")
+vl_out <- read_feather("VL_Out_C_clean.feather")
+
+
+
+lb_out <- lb_out %>% 
+    rename(
+      time = time_est,
+    temp = temp_C,
+    RH = `Humidity_%`,
+    pressure = Pressure_hpa,
+    pm10p0 = `PM10_ug/m3_avg`,
+    pm2p5 = `PM2.5_ug/m3_avg`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) 
+
+lb_out %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+
+vl_out <- vl_out %>% 
+    rename(
+      time = time_est,
+    temp = temp_C,
+    RH = `Humidity_%`,
+    pressure = Pressure_hpa,
+    pm10p0 = `PM10_ug/m3_avg`,
+    pm2p5 = `PM2.5_ug/m3_avg`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) 
+
+vl_out %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+```
+```{r}
+#Time Series plot
+ggplot(lb_out, aes(time,y)) +
+  geom_point(aes(y = pm2p5), size= .3, color = "green", alpha =.4) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+     title = "House 4 PM2.5",
+    subtitle = paste(
+      "Selection from Spring 2021"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5))
+#scale_y_continuous(limits = c(0,50))
+```
+
+```{r}
+#Time Series plot
+ggplot(vl_out, aes(time,y)) +
+  geom_point(aes(y = pm2p5), size= .3, color = "orange", alpha =.4) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+     title = "House 5 PM2.5",
+    subtitle = paste(
+      "Selection from Spring 2021"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5))
+#scale_y_continuous(limits = c(0,50))
+```
+
+
+### Combine and Compare
+We condense measurements to hourly averages:
+
+```{r}
+
+# Make all outdoor sets hourly averages
+jn_out <- jn_out %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = ymd_hms(time)
+  )
+
+
+lorraine_out <- lorraine_out %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = ymd_hms(time)
+  )
+
+lb_out <- lb_out %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = round_date(ymd_hms(time), unit = "hour")
+  ) 
+
+
+vl_out <- vl_out %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = round_date(ymd_hms(time), unit = "hour")
+  ) 
+
+AMNC_out <- AMNC_out %>%
+  rename(
+    pm2p5.amnc = pm2p5,
+    pm10p0.amnc = pm10p0
+  )
+
+
+```
+
+Then we join all the datasets by the time:
+```{r}
+outdoor <- inner_join(jn_out, lorraine_out,by="time", suffix = c(".house1",".house2")) %>% 
+  inner_join(lb_out, by="time") %>%
+  inner_join(vl_out, by="time", suffix = c(".house4",".house5")) %>% 
+  inner_join(AMNC_out, by="time")
+
+
+
+
+```
+
+
+Plots comparing the houses:
+```{r}
+ #preparing data for boxplots
+ boutdoor <- gather(outdoor,`Sensor`, pm2.5,c(pm2p5.house1, pm2p5.house2, pm2p5.house4, pm2p5.house5, pm2p5.amnc))
+
+ boutdoor_labels <-  outdoor %>%
+   rename(
+     `Roosevelt Park` = pm2p5.house1,
+     `Midtown / Rondout` = pm2p5.house2,
+     Uptown = pm2p5.house4,
+     Ponckhockie = pm2p5.house5,
+     AMNC = pm2p5.amnc
+   ) %>%
+ gather(`Sensor`, pm2.5,c(`Roosevelt Park`, `Midtown / Rondout`, Uptown, Ponckhockie, AMNC))
+
+ ggplot(boutdoor_labels,aes(x=`Sensor`,pm2.5, fill = `Sensor`)) +
+   geom_boxplot(outlier.shape = NA, ) +
+   stat_boxplot(geom = "errorbar") +
+  # stat_summary(fun= mean, geom="point", shape=20, size=3, color="yellow") +
+   labs(
+     y = expression(PM2.5 - (μg/~m^3)),
+     x = NULL,
+     title = paste(
+       "Outdoor Sensors, March/April 2021"
+     ),
+    subtitle = paste(
+       "without outliers"
+     )) +
+   scale_fill_manual(labels = c("AMNC","Roosevelt Park","Midtown / Rondout","Uptown", "Ponckhockie"),values=wes_palette(n=5, name = "Darjeeling1")) +
+   scale_y_continuous(limits = c(0,25)) +
+   theme_classic() +
+   theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5)) +
+ theme(axis.text.x = element_text(angle = 60, vjust = 0.5))
+ ggsave("outdoor_spring_boxplots.png", width = 6, height = 4)
+```
+Note that "House 2"'s sensor has it's variables in a format like this: `pm2p5_aqi[n/a]` 
+instead of like this: `pm2p5[ug/m^3]` 
+Is it possible that the units are not configured correctly? 
+It seems strange that the outdoor readings are showing such a difference over this period. 
+
+```{r}
+ggplot(boutdoor,aes(x=`Sensor`,pm2.5, fill = `Sensor`)) +
+   geom_boxplot() +
+   stat_boxplot(geom = "errorbar") +
+   stat_summary(fun=mean, geom="point", shape=20, size=3, color="yellow") +
+   labs(
+     y = expression(PM2.5 - (μg/~m^3)),
+     x = NULL,
+     title = paste(
+       "Outdoor Sensors, March/April 2021"
+     ),
+    subtitle = paste(
+       "with outliers"
+     )) +
+   scale_fill_manual(labels = c("AMNC","House 1","House 2","House 4", "House 5"),values=wes_palette(n=5, name = "Darjeeling1")) +
+   #scale_y_continuous(limits = c(0,25)) +
+   theme_classic() +
+   theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5))
+```
+
+```{r}
+#Time Series plot w all four
+ggplot(boutdoor,aes(x=time, pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6, alpha =.4) +
+  #geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Outdoor Sensors, March/April 2021"
+    ),
+    subtitle = paste(
+      ""
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5))
+#scale_y_continuous(limits = c(0,50))
+```
+Testing of differences in means. I'm using these two tests because the PM2.5 doesn't look like it's normally distributed (just based on the histograms):
+
+```{r}
+library(rstatix)
+kruskal <- kruskal_test(pm2.5 ~`Sensor`,data=boutdoor)
+kruskal
+```
+
+
+```{r}
+wilcox <- pairwise.wilcox.test(boutdoor$pm2.5, boutdoor$Sensor,
+                 p.adjust.method = "bonferroni")
+wilcox
+```
+
+
+Let's just Zoom in on Julie's data for a minute to look at the midnight situation some more. I'm zooming in on the same period we looked at with the indoor readings:
+
+
+```{r}
+#Time Series plot
+ggplot(subset(jn_out, month(time) == 4 & day(time) > 5 & day(time) < 10), aes(time,y)) +
+  geom_point(aes(y = pm2p5), size= .3, color = "red", alpha =.4) +
+  scale_x_datetime(minor_breaks = NULL, date_breaks = "6 hours", date_labels = "%l %p") +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+       title = "House 1 Outdoor Sensor",
+    subtitle = paste(
+      "Selection from April 2021"
+    )) +
+theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+)
+```
+Nothing strange with the outdoor sensor for that period (except that there are some missing observations).
+
+Here's what lb's looks like from the same period.
+```{r}
+#Time Series plot
+ggplot(subset(lb_out, month(time) == 4 & day(time) > 5 & day(time) < 10), aes(time,y)) +
+  geom_point(aes(y = pm2p5), size= .3, color = "red", alpha =.4) +
+  scale_x_datetime(minor_breaks = NULL, date_breaks = "6 hours", date_labels = "%l %p") +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+   title = "House 4 Outdoor Sensor",
+    subtitle = paste(
+      "Selection from April 2021"
+    )) +
+theme(
+    axis.text.x=element_text(angle=60, hjust=1),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5), 
+    text = element_text(family = "Helvetica")
+)
+#scale_y_continuous(limits = c(0,50))
+```
+
+Looking at summaries for the grouped dataset:
+
+```{r}
+
+summary(outdoor)
+
+
+
+```
+
+```{r}
+
+
+outdoor %>%
+  select(
+    pm2p5.house1,
+    pm2p5.house2,
+    pm2p5.house4,
+    pm2p5.house5
+  ) %>% 
+chart.Correlation()
+```
+Inversion Days:
+
+```{r}
+#Time Series plot w all four
+ggplot(subset(boutdoor, (month(time) == 3)  & (day(time) > 26)  & (day(time) < 29)),aes(x=time, pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6, alpha =.4) +
+  #geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Outdoor Sensors, March/April 2021"
+    ),
+    subtitle = paste(
+      ""
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5))
+#scale_y_continuous(limits = c(0,50))
+
+ #ggsave("outdoor_spring_timeseries.png", width = 6, height = 4)
+```
+
+```{r}
+#Time Series plot w all four
+ggplot(subset(boutdoor, (month(time) == 3)  & (day(time) > 6)  & (day(time) < 16)),aes(x=time, pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6, alpha =.4) +
+  #geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Outdoor Sensors, March/April 2021"
+    ),
+    subtitle = paste(
+      ""
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5))
+#scale_y_continuous(limits = c(0,50))
+
+ #ggsave("outdoor_spring_timeseries.png", width = 6, height = 4)
+```

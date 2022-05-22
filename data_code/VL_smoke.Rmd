@@ -1,0 +1,402 @@
+---
+title: "VL_smoke"
+author: "Owen"
+date: "12/11/2021"
+output: html_document
+---
+## KAQI - Outdoor Sensors - Spring 2021
+### Purpleair and Eggs
+
+
+LB:           House 4
+VL:           House 5
+AMNC:         AMNC
+
+First the eggs...
+Loading needed packages, reading in csv files, and taking a peek at what was loaded in:
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(feather)
+library(wesanderson)
+library(PerformanceAnalytics)
+library(openair)
+
+
+AMNC_bigger <- read_csv("andyspring_bigcompare.csv")
+
+
+```
+
+```{r}
+
+lb_i <- read_feather("LB_In_C_clean.feather")
+lb_o <- read_feather("LB_Out_C_clean.feather")
+vl_i <- read_feather("VL_In_C_clean.feather")
+vl_o <- read_feather("VL_Out_C_clean.feather")
+
+
+
+lb_o <- lb_o %>% 
+    rename(
+      time = time_est,
+    temp = temp_C,
+    RH = `Humidity_%`,
+    pressure = Pressure_hpa,
+    pm10p0 = `PM10_ug/m3_avg`,
+    pm2p5 = `PM2.5_ug/m3_avg`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) 
+
+lb_o %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+
+vl_o <- vl_o %>% 
+    rename(
+      time = time_est,
+    temp = temp_C,
+    RH = `Humidity_%`,
+    pressure = Pressure_hpa,
+    pm10p0 = `PM10_ug/m3_avg`,
+    pm2p5 = `PM2.5_ug/m3_avg`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) 
+
+vl_o %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+```
+
+```{r}
+lb_i <- lb_i %>% 
+    rename(
+      time = time_est,
+    temp = temp_C,
+    RH = `Humidity_%`,
+    pressure = Pressure_hpa,
+    pm10p0 = `PM10.0_ug/m3_avg`,
+    pm2p5 = `PM2.5_ug/m3_avg`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) 
+
+lb_i %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+
+vl_i <- vl_i %>% 
+    rename(
+      time = time_est,
+    temp = temp_C,
+    RH = `Humidity_%`,
+    pressure = Pressure_hpa,
+    pm10p0 = `PM10.0_ug/m3_avg`,
+    pm2p5 = `PM2.5_ug/m3_avg`
+  ) %>%
+  select(
+    time, temp, RH, pressure, pm10p0,  pm2p5
+  ) 
+
+vl_i %>% 
+  rename(
+    date = time
+  ) %>%
+  summaryPlot(period = "months")
+```
+
+
+```{r}
+vl_o <- vl_o %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = round_date(ymd_hms(time), unit = "hour")
+  ) 
+
+
+
+lb_o <- lb_o %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = round_date(ymd_hms(time), unit = "hour")
+  ) 
+
+
+lb_i <- lb_i %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = round_date(ymd_hms(time), unit = "hour")
+  ) 
+
+
+vl_i <- vl_i %>%
+  group_by(time = cut(time, breaks="60 min")) %>%
+  summarize(
+    temp = mean(temp, na.rm = TRUE),
+    RH = mean(RH,na.rm = TRUE),
+    pressure = mean(pressure, na.rm = TRUE),
+    pm10p0 = mean(pm10p0,na.rm = TRUE),
+    pm2p5 = mean(pm2p5,na.rm = TRUE)
+            ) %>%
+  mutate(
+    time = round_date(ymd_hms(time), unit = "hour")
+  ) 
+```
+
+Joining,
+```{r}
+AMNC_bigger <- AMNC_bigger %>%
+  rename(
+    pm10p0.amnc = pm10p0,
+    pm2p5.amnc = pm2p5
+  )
+
+
+o <- full_join(lb_o, vl_o,by="time", suffix = c(".house4out",".house5out")) %>% 
+  full_join(lb_i,by="time") %>% 
+  full_join(vl_i,by="time", suffix = c(".house4in",".house5in")) %>% 
+  full_join(AMNC_bigger, by="time")
+
+
+
+```
+
+
+```{r}
+
+ #preparing data for boxplots
+
+
+ # bo <- gather(o,`Sensor`, pm2.5,c(pm2p5.house4out, pm2p5.house5out, pm2p5.house4in, pm2p5.house5in, pm2p5.amnc))
+
+ bo_labels4 <-  o %>% 
+  select(
+    time,
+    pm2p5.house4in,
+    pm2p5.house4out,
+    pm2p5.amnc
+  ) %>%
+   rename(
+     House4in = pm2p5.house4in,
+    House4out = pm2p5.house4out,
+     AMNC = pm2p5.amnc
+   ) %>%
+ gather(`Sensor`, pm2.5,c(House4in, House4out, AMNC))
+ 
+
+ bo_labels5 <-  o %>%
+    select(
+    time,
+    pm2p5.house5in,
+    pm2p5.house5out,
+    pm2p5.amnc
+  ) %>%
+   rename(
+     House5in = pm2p5.house5in,
+     House5out = pm2p5.house5out,
+     AMNC = pm2p5.amnc
+   ) %>%
+ gather(`Sensor`, pm2.5,c(House5in,House5out, AMNC))
+
+```
+
+
+```{r}
+#Time Series plot - burn period - house 5
+ggplot(subset(bo_labels5, (month(time) == 3)  & (day(time) > 19)  & (day(time) < 22)),aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6) +
+  # geom_point(aes(y = pm2p5.amnc), size = .6) +
+  # geom_point(aes(y = pm2p5.house5in), color = "red", size = .6) +
+  # geom_point(aes(y = pm2p5.house5out), color = "blue", size = .6) +
+ geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Reported Burn Event, Spring 2021"
+    ),
+    subtitle = paste(
+      "Approximate period of reported burn period highlighted"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5)) +
+    annotate("rect", xmin = ymd_hms("2021-03-21 19:30:00"), xmax = ymd_hms("2021-03-21 22:30:00"), ymin = 0, ymax = 70, alpha = .2, fill = "yellow") +
+      annotate("rect", xmin = ymd_hms("2021-03-20 07:00:00"), xmax = ymd_hms("2021-03-20 09:00:00"), ymin = 0, ymax = 70, alpha = .2, fill = "yellow") 
+ # scale_fill_manual(labels = c("AMNC","House 5 Out", "House 5 In" ),values=wes_palette(n=3, name = "Darjeeling1")) 
+#scale_y_continuous(limits = c(0,50))
+
+ ggsave("burn_event1.png", width = 6, height = 4)
+```
+
+```{r}
+#Time Series plot - burn period - house 5
+ggplot(subset(bo_labels5, (month(time) == 4)  & (day(time) > 2)  & (day(time) < 4)),aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6) +
+  # geom_point(aes(y = pm2p5.amnc), size = .6) +
+  # geom_point(aes(y = pm2p5.house5in), color = "red", size = .6) +
+  # geom_point(aes(y = pm2p5.house5out), color = "blue", size = .6) +
+ geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Reported Burn Event, Spring 2021"
+    ),
+    subtitle = paste(
+      "Approximate period of reported burn period highlighted"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5)) +
+    annotate("rect", xmin = ymd_hms("2021-04-03 08:30:00"), xmax = ymd_hms("2021-04-03 11:30:00"), ymin = 0, ymax = 70, alpha = .2, fill = "yellow") 
+ # scale_fill_manual(labels = c("AMNC","House 5 Out", "House 5 In" ),values=wes_palette(n=3, name = "Darjeeling1")) 
+#scale_y_continuous(limits = c(0,50))
+
+ ggsave("burn_event2.png", width = 6, height = 4)
+```
+
+```{r}
+#Time Series plot - burn period - house 4
+ggplot(subset(bo_labels4, (month(time) == 4)  & (day(time) > 10)  & (day(time) < 14)),aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6) +
+  # geom_point(aes(y = pm2p5.amnc), size = .6) +
+  # geom_point(aes(y = pm2p5.house5in), color = "red", size = .6) +
+  # geom_point(aes(y = pm2p5.house5out), color = "blue", size = .6) +
+ geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Reported Burn Event, Spring 2021"
+    ),
+    subtitle = paste(
+      "Approximate period of reported burn period highlighted"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5)) +
+    annotate("rect", xmin = ymd_hms("2021-04-11 20:00:00"), xmax = ymd_hms("2021-04-11 22:00:00"), ymin = 0, ymax = 70, alpha = .2, fill = "yellow") +
+    annotate("rect", xmin = ymd_hms("2021-04-12 23:00:00"), xmax = ymd_hms("2021-04-13 01:00:00"), ymin = 0, ymax = 70, alpha = .2, fill = "yellow") 
+  #scale_fill_manual(labels = c("AMNC","House 5 Out", "House 5 In" ),values=wes_palette(n=3, name = "Darjeeling1")) 
+#scale_y_continuous(limits = c(0,50))
+
+ ggsave("burn_event3.png", width = 6, height = 4)
+```
+
+```{r}
+#Time Series plot - burn period - house 4
+ggplot(subset(bo_labels4, (month(time) == 4)  & (day(time) > 2)  & (day(time) < 4) ),aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_point(aes(color = `Sensor`), size = .6) +
+  # geom_point(aes(y = pm2p5.amnc), size = .6) +
+  # geom_point(aes(y = pm2p5.house5in), color = "red", size = .6) +
+  # geom_point(aes(y = pm2p5.house5out), color = "blue", size = .6) +
+ geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "Reported Burn Event, Spring 2021"
+    ),
+    subtitle = paste(
+      "Approximate period of reported burn period highlighted"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5)) +
+    annotate("rect", xmin = ymd_hms("2021-04-03 14:00:00"), xmax = ymd_hms("2021-04-03 23:00:00"), ymin = 0, ymax = 70, alpha = .2, fill = "yellow") 
+ #   annotate("rect", xmin = ymd_hms("2021-04-12 23:00:00"), xmax = ymd_hms("2021-04-13 01:00:00"), #ymin = 0, ymax = 70, alpha = .2, fill = "yellow") 
+  #scale_fill_manual(labels = c("AMNC","House 5 Out", "House 5 In" ),values=wes_palette(n=3, name = "Darjeeling1")) 
+#scale_y_continuous(limits = c(0,50))
+
+ ggsave("burn_event4.png", width = 6, height = 4)
+```
+
+```{r}
+#Time Series plot - Inversion date AMNC
+ggplot(subset(AMNC_bigger, (month(time) == 3)  & (day(time) > 6)  & (day(time) < 16) ),aes(x=time,pm2p5.amnc)) +
+  geom_point( color = "red",size = .6) +
+  annotate("segment", size = 1, x =as_datetime("2021-03-10"), y = 24, xend = as_datetime("2021-03-10"), yend = 20,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) + 
+  # geom_point(aes(y = pm2p5.amnc), size = .6) +
+  # geom_point(aes(y = pm2p5.house5in), color = "red", size = .6) +
+  # geom_point(aes(y = pm2p5.house5out), color = "blue", size = .6) +
+#geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "AMNC Hourly PM2.5, Spring 2021"
+    ),
+    subtitle = paste(
+      "Potential Inversion Event Marked With Arrow"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5)) 
+   
+   #scale_fill_manual(labels = c("AMNC","House 5 Out", "House 5 In" ),values=wes_palette(n=3, name = "Darjeeling1")) 
+#scale_y_continuous(limits = c(0,50))
+
+ #ggsave("march_inv_event.png", width = 6, height = 4)
+```
+
+```{r}
+#Time Series plot - Inversion date AMNC
+ggplot(subset(AMNC_bigger, (month(time) == 3)  & (day(time) > 22)  & (day(time) < 26) ),aes(x=time,pm2p5.amnc)) +
+  geom_point( color = "red",size = .6) +
+  # annotate("segment", size = 1, x =as_datetime("2021-03-10"), y = 24, xend = as_datetime("2021-03-10"), yend = 20,arrow = arrow(type = "closed", length = unit(0.02, "npc"))) + 
+  # geom_point(aes(y = pm2p5.amnc), size = .6) +
+  # geom_point(aes(y = pm2p5.house5in), color = "red", size = .6) +
+  # geom_point(aes(y = pm2p5.house5out), color = "blue", size = .6) +
+#geom_smooth(aes(color = `Sensor`), se = FALSE) +
+  theme_classic() +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "AMNC Hourly PM2.5, Spring 2021"
+    ),
+    subtitle = paste(
+      "Potential Inversion Event Marked With Arrow"
+    )) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+   theme(plot.subtitle = element_text(hjust = 0.5)) 
+   
+   #scale_fill_manual(labels = c("AMNC","House 5 Out", "House 5 In" ),values=wes_palette(n=3, name = "Darjeeling1")) 
+#scale_y_continuous(limits = c(0,50))
+
+# ggsave("march_inv_event.png", width = 6, height = 4)
+```
