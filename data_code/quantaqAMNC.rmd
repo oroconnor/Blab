@@ -1,0 +1,264 @@
+---
+title: "QuantAQ Input"
+output: html_notebook
+---
+
+This is the script for the QuantAQ sensor installed on the
+Exterior of Andy Murphy Neighborhood Center. 
+
+User must place a copy of this months data file into their working directory where they keep this script, along with a copy of the "master" csv file. 
+The script will save a cleaned output of this months data, and save a new version of the master csv with the new data appended. Both will be saved to the working directory and need to be manually moved into Google Drive for sharing/storage. 
+
+
+Load in the packages that we're using:
+```{r}
+library(tidyverse)
+library(lubridate)
+library(openair)
+```
+
+Read in the csv file. This file has already been downloaded and put into the appropriate folder with the correct name. You need to to edit the file names in the code chunk below:
+```{r}
+month_name <- "April 2021" #edit the correct month here
+
+name_file <- "AMNC_QAQ_April.csv" #This is what you should edit each month to change the name of the file
+name_file_raw <-  "Mod-PM-00044_Apr2021_AMNC_raw.csv" #This is what you should edit to change the name of the raw data file
+
+quantaq <- read_csv(name_file) 
+quantaq_raw <- read_csv(name_file_raw)
+```
+
+
+Before we drop the device_state column, we can just verify that there are no entries with another device_state besides "ACTIVE". We're expecting that if we are taking a reading that the device is "ACTIVE", but this is just checking in case one time something is different!:
+```{r}
+q_state <- filter(quantaq,
+            device_state != "ACTIVE"
+)
+
+q_state
+
+# Do the same for raw data
+q_state_raw <- filter(quantaq_raw,
+            device_state != "ACTIVE"
+)
+
+q_state_raw
+
+```
+
+Drop columns that we are not storing in our cleaned up file. Then rename columns according to lab conventions. Then reorder the dataframe to be in chronological order. Finally, round the seconds of timestamp down to zero for ease in merging this data with other dataframes:
+```{r}
+quantaq <- quantaq %>% 
+  select(-c(X1,device_state,timestamp,pm1_model_id, pm25_model_id, pm10_model_id)) %>% 
+  rename( # Rename columns according to lab conventions
+    time = timestamp_local 
+    # Others to rename? 
+  )
+  
+  quantaq <- quantaq[order(quantaq$time),]
+  
+  #zero out the seconds of timestamp
+  second(quantaq$time) <- 0
+
+  
+  # Do the same for raw_data
+  quantaq_raw <- quantaq_raw %>% 
+  select(-c(X1,device_state,timestamp)) %>% 
+  rename( # Rename columns according to lab conventions
+    time = timestamp_local,
+    raw_table_id = id
+    )
+  
+  quantaq_raw <- quantaq_raw[order(quantaq_raw$time),]
+  
+  #zero out the seconds of timestamp
+  second(quantaq_raw$time) <- 0
+  
+```
+
+Give yourself a quick look at the data before any joining or cleaning happens:
+```{r}
+#summary plot
+quantaq %>%
+  select(
+    -c(id,sn,raw_table_id,lat,lon)
+  ) %>%
+  rename(
+    date = time
+  ) %>%
+summaryPlot(period = "months")
+```
+And a quick look at some summary statistics for the different variables before any cleaning, scanning to see if the ranges seem in the realm of the possible:
+```{r}
+summary(quantaq)
+```
+
+Isolate the top and bottom 10 in order to scan values to confirm that even the extreme values don't have measurement errors causing issues:
+
+
+```{r}
+# Starting with pm2.5
+# First make a temp dataframe with the data:
+topten <- quantaq
+# Then reorder low to high according to pm2.5
+topten <- topten[order(topten$pm25),]
+
+#display the lowest 10 rows
+head(topten, n = 10)
+
+#display the highest 10 rows
+tail(topten, n = 10)
+
+
+```
+
+```{r}
+# And next pm10
+# First make a temp dataframe with the data:
+topten <- quantaq
+# Then reorder low to high according to pm10
+topten <- topten[order(topten$pm10),]
+
+#display the lowest 10 rows
+head(topten, n = 10)
+
+#display the highest 10 rows
+tail(topten, n = 10)
+
+
+```
+
+Now a quick look at the raw_data before we proceed. There are so many variables in this data, that we want to mostly be verifying that the data is covering the same time period. I'll choose just a handful of variables to display:
+
+```{r}
+#summary plot
+quantaq_raw %>%
+  select(
+    time,sample_temp,sample_rh,bin0,bin2,bin3,opcn3_pm25,opcn3_pm10,pm25_env,opcn3_pm10
+  ) %>%
+  rename(
+    date = time
+  ) %>%
+summaryPlot(period = "months")
+```
+Join the two sets:
+
+```{r}
+quantaq_full <- full_join(quantaq,quantaq_raw, by = "raw_table_id",suffix = c(".final", ".raw"))
+```
+
+
+
+Clean the variables by dropping rows that have values outside of measurement range (another alternative would be to preserve row but change value to NA):
+
+```{r}
+#dropping duplicate columns and a little renaming
+quantaq_full <- quantaq_full %>% 
+  select(-c(sample_rh.raw,sample_temp.raw,sample_pres.raw,lat.raw,lon.raw, sn.raw)) %>%
+  rename(
+    time = time.final,
+    sn = sn.final,
+    sample_temp = sample_temp.final,
+    sample_rh = sample_rh.final,
+    sample_pres = sample_pres.final
+  )
+
+
+# Marco: need rules confirmed
+quantaqc <- quantaq_full %>% 
+  filter(
+     sample_temp >= -273.15 & sample_temp <= 200,
+     sample_rh >= 0 & sample_rh <= 100,
+     sample_pres >= 0 & sample_pres <= 2000,
+     pm1 >= 0 & pm1 <= 9999,
+     pm25 >= 0 & pm25 <= 9999,
+     pm10 >= 0 & pm10 <= 9999,
+     bin0 >= 0,
+     bin1 >= 0,
+     bin2 >= 0,
+     bin3 >= 0,
+     bin4 >= 0,
+     bin5 >= 0,
+     bin6 >= 0,
+     bin7 >= 0,
+     bin8 >= 0,
+     bin9 >= 0,
+     bin10 >= 0,
+     bin11 >= 0,
+     bin12 >= 0,
+     bin13 >= 0,
+     bin14 >= 0,
+     bin15 >= 0,
+     bin16 >= 0,
+     bin17 >= 0,
+     bin18 >= 0,
+     bin19 >= 0,
+     bin20 >= 0,
+     bin21 >= 0,
+     bin22 >= 0,
+     bin23 >= 0,
+     opcn3_temp >= -273.15 & opcn3_temp <= 200,
+     opcn3_rh >= 0 & opcn3_rh <= 100,
+     pm1_env >= 0 & pm1_env <= 9999,
+     pm25_env >= 0 & pm25_env <= 9999,
+     pm10_env >= 0 & pm10_env <= 9999,
+     neph_bin0 >= 0,
+     neph_bin1 >= 0,
+     neph_bin2 >= 0,
+     neph_bin3 >= 0,
+     neph_bin4 >= 0,
+     neph_bin5 >= 0,
+     flag == 0
+  )
+
+```
+
+```{r}
+glimpse(quantaqc)
+```
+
+Number of rows dropped and % of rows dropped by cleaning:
+```{r}
+paste("Number of rows dropped:", nrow(quantaq_full) - nrow(quantaqc))
+p <- (nrow(quantaq_full) - nrow(quantaqc))/nrow(quantaq_full)
+paste("% of rows dropped:", p)
+```
+
+Displaying the dropped rows so that a human can examine why they were dropped and whether a problem needs to be investigated:
+
+```{r}
+droppedrows <- anti_join(quantaq_full,quantaqc)
+
+droppedrows
+```
+
+
+
+
+And finally export the clean csv file to the designated storage folder. Right now I have it exporting to a csv file. You could consider writing to a feather file format as well:
+
+
+```{r}
+# Take the orginal file name and insert "clean" label in file name
+path_name <- str_sub(name_file,1,nchar(name_file)-4) %>%
+  paste("_clean.csv", sep = "")
+
+write_csv(quantaqc, file = path_name)
+
+```
+
+
+Beta version of interacting with the google drive. Let's discuss before this gets used:
+
+```{r}
+#read in master file
+master <- read_csv("AMNC_quantaq_master.csv") #verify name
+
+#binding the new month's data to master and creating new master csv file
+
+newmaster <- bind_rows(master, quantaqc)
+write_csv(newmaster, file ="AMNC_quantaq_master.csv") #verify that it overwrites
+
+
+```
+

@@ -1,0 +1,343 @@
+---
+title: "PurpleAir Notebook"
+output: html_notebook
+---
+This script is for the PurpleAir Sensor installed on the
+Exterior of Bard Library
+
+User must place a copy of this months data files (4 of them) into their working directory where they keep this script, along with a copy of the "master" csv file. 
+The script will save a cleaned output of this months data, and save a new version of the master csv with the new data appended. Both will be saved to the working directory and need to be manually moved into Google Drive for sharing/storage. 
+
+
+Load in the packages that we're using:
+```{r}
+library(tidyverse)
+library(lubridate)
+library(openair)
+library(feather)
+
+```
+
+Read in the csv files. These file has already been downloaded and put into the appropriate folder with the correct name. The user needs to select whether this sensor is monitoring outside or inside:
+```{r}
+
+# Is the sensor monitoring outside or indoors
+sensor_loc = 1 #Please choose 1 for outside or 0 for indoors - USER INPUT NEEDED
+name_file = "purpleair_stevenson_april2021" #edit with correct month/year. For this sensor, only affects how data is saved.
+
+name_file1 <- "Bard College_ Stevenson Library (outside) (42.023029 -73.903959) Primary Real Time 04_01_2021 04_30_2021.csv" #This is what you should edit each month to change the name of the file
+
+name_file2 <- "Bard College_ Stevenson Library B (undefined) (42.023029 -73.903959) Primary Real Time 04_01_2021 04_30_2021.csv"
+
+name_file3 <- "Bard College_ Stevenson Library (outside) (42.023029 -73.903959) Secondary Real Time 04_01_2021 04_30_2021.csv"
+
+name_file4 <- "Bard College_ Stevenson Library B (undefined) (42.023029 -73.903959) Secondary Real Time 04_01_2021 04_30_2021.csv"
+  
+file1 <- read_csv(name_file1)
+file2 <- read_csv(name_file2)
+file3 <- read_csv(name_file3)
+file4 <- read_csv(name_file4)
+
+
+
+
+```
+
+Prepping timestamps for joining by converting to datetime format and rounding timestamps:
+```{r}
+file1 <- file1 %>%
+  mutate(
+    created_at = floor_date(as_datetime(created_at),"2 minutes")
+  ) %>%
+  rename(
+    time_utc = created_at
+  )
+
+file2 <- file2 %>%
+  mutate(
+    created_at = floor_date(as_datetime(created_at),"2 minutes")
+  ) %>%
+  rename(
+    time_utc = created_at
+  )
+
+file3 <- file3 %>%
+  mutate(
+    created_at = floor_date(as_datetime(created_at),"2 minutes")
+  ) %>%
+  rename(
+    time_utc = created_at
+  )
+
+file4 <- file4 %>%
+  mutate(
+    created_at = floor_date(as_datetime(created_at),"2 minutes")
+  ) %>%
+  rename(
+    time_utc = created_at
+  )
+```
+
+
+
+Merge by "created_at", per Marco's email clarification 7/19/21. :
+```{r}
+
+purple_air <- full_join(file1, file2, by = "time_utc", suffix = c(".primA", ".primB"))
+purple_air <- full_join(purple_air, file3, by = "time_utc")
+purple_air <- full_join(purple_air, file4, by = "time_utc", suffix = c(".secA", ".secB"))
+
+
+```
+
+
+
+Drop columns that we are not storing in our cleaned up file. Then rename columns according to lab conventions. Then reorder the dataframe to be in chronalogical order. Finally, round the seconds of timestamp down to zero for ease in merging this data with other dataframes:
+
+```{r}
+purple_air <- purple_air %>% 
+  select(-c(UptimeMinutes.primA, X11.primA, UptimeMinutes.primB, IAQ, X11.primB, X11.secA, X11.secB ))
+# Rename columns according to lab conventions
+# I would prefer to have variable names that didn't require `backticks`
+  
+```
+
+
+```{r}
+#Add column for EST. Keeps UTC time column. 
+purple_air$time_est <- with_tz(purple_air$time_utc, tz = "EST")
+
+#convert Temp F to C
+purple_air$temp_C <- (purple_air$Temperature_F - 32) * (5/9)
+
+```
+
+Give yourself a quick look at the data before any cleaning happens:
+```{r}
+#summary plot
+s <- purple_air %>%
+  select(
+    -c(entry_id.secA, entry_id.secB,ADC,RSSI_dbm)
+  ) %>%
+  rename(
+    date = time_utc
+  ) %>%
+    filter(
+      !is.na(date)
+  ) 
+  
+summaryPlot(s,period = "months")
+```
+Look at the same table but just selecting a few variables to get a better look:
+
+```{r}
+#summary plot
+purple_air %>%
+  select(
+    c(time_utc,`PM2.5_CF1_ug/m3.primA`,`PM10.0_CF1_ug/m3.primA`,`PM2.5_CF1_ug/m3.primB`,`PM10.0_CF1_ug/m3.primB`,`PM2.5_ATM_ug/m3.primA`,`PM2.5_ATM_ug/m3.primB`)
+  ) %>%
+  rename(
+    date = time_utc
+  ) %>%
+    filter(
+      !is.na(date)
+  ) %>%
+  summaryPlot(period = "months")
+```
+
+And a quick look at some summary statistics for the different variables before any cleaning, scanning to see if the ranges seem in the realm of the possible:
+```{r}
+summary(purple_air)
+```
+
+
+
+
+Clean the variables by dropping rows that have values outside of measurement range (another alternative would be to preserve row but change value to NA):
+
+```{r}
+# Marco: need rules confirmed
+purple_airc <- purple_air %>% 
+  filter(
+     temp_C >= -273.15 & temp_C <= 200,
+     `Humidity_%` >= 0 & `Humidity_%` <= 100,
+     Pressure_hpa >= 0 & Pressure_hpa <= 2000,
+     `PM1.0_CF1_ug/m3.primA` >= 0 & `PM1.0_CF1_ug/m3.primA` <= 9999,
+     `PM2.5_CF1_ug/m3.primA` >= 0 & `PM2.5_CF1_ug/m3.primA` <= 9999,
+     `PM10.0_CF1_ug/m3.primA` >= 0 & `PM10.0_CF1_ug/m3.primA` <= 9999,
+      `PM2.5_ATM_ug/m3.primA` >= 0 & `PM2.5_ATM_ug/m3.primA` <= 9999,
+      `PM1.0_ATM_ug/m3.secA` >= 0 & `PM1.0_ATM_ug/m3.secA` <= 9999,
+     `PM10_ATM_ug/m3.secA` >= 0 & `PM10_ATM_ug/m3.secA` <= 9999,
+      `PM1.0_CF1_ug/m3.primB` >= 0 & `PM1.0_CF1_ug/m3.primB` <= 9999,
+     `PM2.5_CF1_ug/m3.primB` >= 0 & `PM2.5_CF1_ug/m3.primB` <= 9999,
+     `PM10.0_CF1_ug/m3.primB` >= 0 & `PM10.0_CF1_ug/m3.primB` <= 9999,
+     `PM2.5_ATM_ug/m3.primB` >= 0 & `PM2.5_ATM_ug/m3.primB` <= 9999,
+      `PM1.0_ATM_ug/m3.secB` >= 0 & `PM1.0_ATM_ug/m3.secB` <= 9999,
+     `PM10_ATM_ug/m3.secB` >= 0 & `PM10_ATM_ug/m3.secB` <= 9999,
+  )
+
+```
+
+
+```{r}
+glimpse(purple_airc)
+```
+
+
+Number of rows dropped and % of rows dropped by cleaning:
+```{r}
+paste("Number of rows dropped:", nrow(purple_air) - nrow(purple_airc))
+p <- (nrow(purple_air) - nrow(purple_airc))/nrow(purple_air)
+paste("% of rows dropped:", p)
+```
+
+Displaying the dropped rows so that a human can examine why they were dropped and whether a problem needs to be investigated:
+
+```{r}
+droppedrows <- anti_join(purple_air,purple_airc)
+
+droppedrows
+```
+
+
+Adding averaged columns for PM from two sensors:
+
+```{r}
+
+#Made variable names that are neutral for outdoors and indoors so that visuals scripts could be shared. 
+
+
+if (sensor_loc == 1){ 
+  purple_airc$`PM1.0_ug/m3_avg` <- (purple_airc$`PM1.0_ATM_ug/m3.secA`+purple_airc$`PM1.0_ATM_ug/m3.secB`)/2
+  purple_airc$`PM2.5_ug/m3_avg` <- (purple_airc$`PM2.5_ATM_ug/m3.primA`+purple_airc$`PM2.5_ATM_ug/m3.primB`)/2
+  purple_airc$`PM10_ug/m3_avg` <- (purple_airc$`PM10_ATM_ug/m3.secA`+purple_airc$`PM10_ATM_ug/m3.secB`)/2
+} else{
+  purple_airc$`PM1.0_ug/m3_avg` <- (purple_airc$`PM1.0_CF1_ug/m3.primA`+purple_airc$`PM1.0_CF1_ug/m3.primB`)/2
+  purple_airc$`PM2.5_ug/m3_avg` <- (purple_airc$`PM2.5_CF1_ug/m3.primA`+purple_airc$`PM2.5_CF1_ug/m3.primB`)/2
+  purple_airc$`PM10_ug/m3_avg` <- (purple_airc$`PM10.0_CF1_ug/m3.primA`+purple_airc$`PM10.0_CF1_ug/m3.primB`)/2
+  }
+
+
+```
+Reorder Columns for use of user:
+
+```{r}
+
+purple_airc <- purple_airc %>% 
+  relocate(
+    time_utc,
+    time_est,
+    temp_C,
+    `Humidity_%`,
+    Pressure_hpa,
+    `PM1.0_ug/m3_avg`,
+    `PM2.5_ug/m3_avg`,
+    `PM10_ug/m3_avg`,
+    
+    `PM1.0_CF1_ug/m3.primA`,
+    `PM2.5_CF1_ug/m3.primA`,
+    `PM10.0_CF1_ug/m3.primA`,
+    `PM1.0_ATM_ug/m3.secA`,
+    `PM2.5_ATM_ug/m3.primA`,
+    `PM10_ATM_ug/m3.secA`,
+    
+    `PM1.0_CF1_ug/m3.primB`,
+    `PM2.5_CF1_ug/m3.primB`,
+    `PM10.0_CF1_ug/m3.primB`,
+    `PM1.0_ATM_ug/m3.secB`,
+    `PM2.5_ATM_ug/m3.primB`,
+    `PM10_ATM_ug/m3.secB`,
+    
+    `>=0.3um/dl.secA`,
+    `>=0.5um/dl.secA`,
+    `>1.0um/dl.secA`,
+    `>=2.5um/dl.secA`,
+    `>=5.0um/dl.secA`,
+    `>=10.0um/dl.secA`,
+    
+    `>=0.3um/dl.secB`,
+    `>=0.5um/dl.secB`,
+    `>1.0um/dl.secB`,
+    `>=2.5um/dl.secB`,
+    `>=5.0um/dl.secB`,
+    `>=10.0um/dl.secB`,
+    
+    RSSI_dbm,
+    ADC,
+    Temperature_F,
+    entry_id.primA,
+    entry_id.primB,
+    entry_id.secA,
+    entry_id.secA,
+    entry_id.secB
+  )
+
+
+```
+Isolate the top and bottom 10 in order to scan values to confirm that even the extreme values don't have measurement errors causing issues:
+
+
+```{r}
+# Starting with pm2.5
+# First make a temp dataframe with the data:
+topten <- purple_airc
+# Then reorder low to high according to pm2.5
+topten <- topten[order(topten$`PM2.5_ug/m3_avg`),]
+
+#display the lowest 10 rows
+head(topten, n = 10)
+
+#display the highest 10 rows
+tail(topten, n = 10)
+
+
+```
+
+```{r}
+# And next pm10
+# First make a temp dataframe with the data:
+topten <- purple_airc
+# Then reorder low to high according to pm10
+topten <- topten[order(topten$`PM10_ug/m3_avg`),]
+
+#display the lowest 10 rows
+head(topten, n = 10)
+
+#display the highest 10 rows
+tail(topten, n = 10)
+
+
+```
+
+And finally export the clean csv file to the designated storage folder. Right now I have it exporting to a csv file. You could consider writing to a feather file format as well:
+
+
+```{r}
+# Take the orginal file name and insert "clean" label in file name
+
+#write feather file
+feather_name <- str_sub(name_file,1,nchar(name_file)-4) %>%
+  paste("_clean.feather", sep = "")
+write_feather(purple_airc, feather_name)
+
+
+#Change the dttm columns to chr for writing to csv file
+purple_airc$time_utc <- as.character(purple_airc$time_utc)
+purple_airc$time_est <- as.character(purple_airc$time_est)
+
+#and write csv file
+path_name <- str_sub(name_file,1,nchar(name_file)-4) %>%
+  paste("_clean.csv", sep = "")
+
+write_csv(purple_airc, file = path_name)
+
+#read in master file
+master <- read_csv("stevenson_purpleair_master.csv")
+master$time_utc <- as.character(master$time_utc)
+master$time_est <- as.character(master$time_est)
+
+#binding the new month's data to master and creating new master csv file
+newmaster <- bind_rows(master, purple_airc)
+write_csv(newmaster, file ="stevenson_purpleair_master.csv") #verify that it overwrites
+
+```
