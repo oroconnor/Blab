@@ -1,0 +1,446 @@
+---
+title: "ANDY MURPHY CENTER: Egg vs MetOne Profiler"
+author: "Owen O'Connor"
+date: "May 18 2021"
+output: html_notebook
+---
+## Egg vs MetOne Profiler
+### Intro
+
+For much of 2020, Bard Center for the Study of Land, Air, and Water had two different air quality sensors deployed on the Andy Murphy Center in Kingston. One was the more expensive and supposedly more accurate MetOne-212. The other is the more consumer-grade Air Quality Egg. There are other eggs taking readings at houses around Kingston, and the purpose of this data analysis is to compare the two sensors that were both taking readings on the Andy Murphy center at the same time, to better understand how these two sensors compare. 
+
+
+```{r}
+#load in MetOne data and Egg data from Andy Murphy Center and
+#combine the two datasets
+
+
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(feather)
+library(RCurl)
+library(PerformanceAnalytics)
+library(Metrics)
+library(psych)
+library(wesanderson)
+library(mgcv)
+library(openair)
+library(rstatix)
+library(nortest)
+
+#read in the tibble prepared by airmasterk.R script
+airmasterk <- read_feather("airmasterk.feather")
+
+metmasterk <- airmasterk %>% 
+  select(
+    Time,Temp,RH,pm2.5,pm10
+  ) %>%
+  rename(
+    time = Time,
+    temp_met = Temp,
+    rh_met = RH,
+    pm2.5_met = pm2.5,
+    pm10_met = pm10
+    )
+```
+
+
+I grabbed the data directly from the Egg API for this. Below is the code for that, but I'm leaving it in the text section because it takes a long time to run and we already have the data pulled:
+
+#Gets the data from Egg API. TAKES MORE THAN AN HOUR TO RUN. 
+#Load in already prepared tibble below instead unless you need to update.
+csv_data = ""
+start_date = as.POSIXct("2020/05/04")
+end_date = as.POSIXct("2021/01/15")
+while (start_date < end_date) {
+  start_date_as_str = format(start_date, format="%Y-%m-%dT%H:%M:00Z")
+  next_date = start_date + (24 * 60 * 60)
+  next_date_as_str = format(next_date, format="%Y-%m-%dT%H:%M:00Z")
+  egg_url = paste("https://airqualityegg.com/api/v2/messages/device/egg008044b967880111?apiKey=JE5TCQQ-288MGVF-JE4AQ8T-HPQS0HR&format=csv&start-date=", start_date_as_str, "&end-date=", next_date_as_str,"&resolution=PT01M", sep = "")    
+  csv_data_for_period = getURL(egg_url)
+  csv_data = paste(csv_data, csv_data_for_period, "\n")
+  start_date = next_date
+}
+
+eggmasterk <- read_csv(csv_data)
+
+#save as a tibble for easy loading
+write_feather(eggmasterk,"eggmasterk.feather")
+
+### Now back to the code, loading in the file prepared above ...
+
+```{r}
+#read in the tibble prepared by above
+eggmasterk <- read_feather("eggmasterk.feather")
+
+eggmasterk <- eggmasterk %>%
+  select(
+    `time`,`co2[ppm]`,`o3[ppb]`,`pm10p0[ug/m^3]`,`pm2p5[ug/m^3]`,`temperature[degC]`,`humidity[percent]`
+  ) %>%
+  rename(
+    pm10_egg = `pm10p0[ug/m^3]`,
+    pm2.5_egg = `pm2p5[ug/m^3]`,
+    co2_egg = `co2[ppm]`,
+    o3_egg =`o3[ppb]`,
+    temp_egg = `temperature[degC]`,
+    rh_egg = `humidity[percent]`
+  ) 
+
+eggmasterk$pm10_egg <- as.numeric(eggmasterk$pm10_egg)
+eggmasterk$pm2.5_egg <- as.numeric(eggmasterk$pm2.5_egg)
+eggmasterk$co2_egg <- as.numeric(eggmasterk$co2_egg)
+eggmasterk$o3_egg <- as.numeric(eggmasterk$o3_egg)
+eggmasterk$temp_egg <- as.numeric(eggmasterk$temp_egg)
+eggmasterk$rh_egg <- as.numeric(eggmasterk$rh_egg)
+
+eggmasterk<-mutate(eggmasterk, time= parse_datetime(time))
+```
+
+Let's take a quick look at the two datasets separately before we join them together. 
+
+```{r}
+eggmasterk %>% 
+  rename(
+    date = time
+  ) %>%
+  na.omit() %>%
+  summaryPlot(period = "months")
+```
+```{r}
+metmasterk %>% 
+  rename(
+    date = time
+  ) %>%
+  slice(-36781) %>%
+  summaryPlot(period = "months")
+```
+I'm only taking the observations where there is overlap between the two units. The egg just has that one big section missing in June. The MetOne has more missing chunks. But we're going to look at where there is overlap. 
+
+```{r}
+#joining metmasterk and eggmasterk
+comparek <- inner_join(metmasterk,eggmasterk,by = "time") %>%
+  na.omit()
+
+comparek_notime <- comparek %>%
+  select(-c("time"))
+
+#two sensors over time
+ggplot(comparek, aes(time,y)) +
+  geom_point(aes(y = pm2.5_met), size= .3, color = "red", alpha =.4) +
+  geom_point(aes(y = pm2.5_egg), size= .3, color = "blue", alpha =.4) + 
+  theme_classic() 
+
+```
+So we lost a section where the egg is not taking readings in June, and some other chunks where the MetOne has missing data, but overall we've got decent amount of overlap. 
+There's a reading from the egg in early July (July 4th?) that's really throwing our scale off, so let's zoom in and see if we can see better. While we're at it, let's take hourly averages so that it's a little less messy and add some labels. 
+
+
+```{r}
+
+
+#condensing to hourly
+hcomparek <- comparek %>%
+  mutate(hour = hour(time), date = as_date(time))
+hcomparek <- hcomparek %>%
+  group_by(date,hour) %>% #group by the date and hour columns
+  summarise(hpm2.5_egg = mean(pm2.5_egg),
+            hpm2.5_met = mean(pm2.5_met)
+             )
+
+hcomparek <- hcomparek %>%
+  mutate(YMDH = ymd_h(paste(date,hour)))%>%
+  na.omit()
+
+#melted for legend - Scale limited
+ggplot(gather(hcomparek,`Sensor`, sensor,c(hpm2.5_met,hpm2.5_egg)),
+       aes(YMDH,sensor, color = `Sensor`)) +
+  geom_point(size = .3, alpha = .4) +
+  geom_smooth() +
+  labs(
+    y = expression(Mass - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5 Hourly Averages"
+    )) +
+  theme_classic() +
+  scale_y_continuous(limits = c(0,50)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=2, name="Darjeeling1"),labels = c("Egg","MetOne"))
+```
+Ok. So, we're seeing that the Egg seems to have higher readings generally, but also seems to have larger variance in its readings. We get the same impression condensing down to daily averages:
+
+```{r}
+#condensing to daily
+dcomparek <- comparek %>%
+  mutate(date = as_date(time))
+
+dcomparek <- dcomparek %>%
+  group_by(date) %>% #group by the date and hour columns
+  summarise(dpm2.5_egg = mean(pm2.5_egg,na.rm = TRUE),
+            dpm2.5_met = mean(pm2.5_met,na.rm = TRUE)
+  )
+
+dcomparek <- dcomparek %>%
+  mutate(YMD = ymd(date))
+
+#melted for legend - Scale limited
+ggplot(gather(dcomparek,`Sensor`, sensor,c(dpm2.5_met,dpm2.5_egg)),
+       aes(YMD,sensor, color = `Sensor`)) +
+  geom_point(size = .3, alpha = .4) +
+  geom_smooth() +
+  labs(
+    y = expression(Mass - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5 Daily Averages"
+    )) +
+  theme_classic() +
+  scale_y_continuous() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=2, name="Darjeeling1"),labels = c("Egg","MetOne"))
+```
+
+Now you're wondering how these two sensors are correlated. First, just for fun, let's just zoom in a random week and look more zoomed in at the raw data:
+
+```{r}
+
+
+ggplot(gather(subset(comparek, month(time) == 11 & day(time) > 1 & day(time) < 10),`Sensor`, sensor,c(pm2.5_met,pm2.5_egg)),
+       aes(time,sensor, color = `Sensor`)) +
+  geom_point(size = .3, alpha = .4) +
+  labs(
+    y = expression(Mass - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=2, name="Darjeeling1"),labels = c("Egg","MetOne"))
+
+```
+Hmm. One more random week: 
+
+```{r}
+ggplot(gather(subset(comparek, month(time) == 12 & day(time) > 0 & day(time) < 7),`Sensor`, sensor,c(pm2.5_met,pm2.5_egg)),
+       aes(time,sensor, color = `Sensor`)) +
+  geom_point(size = .3, alpha = .4) +
+  labs(
+    y = expression(Mass - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=2, name="Darjeeling1"),labels = c("Egg","MetOne"))
+
+```
+Let's do a correlation plot:
+
+
+```{r}
+#pairwise plots and correlation
+chart.Correlation(comparek_notime)
+
+cor(comparek_notime)
+```
+Two impressions that I have: First is that the correlation is much weaker between these two instruments than among the Eggs at the different locations (see outdoor_compare.Rmd). It also seems like there are a few isolated events where the Egg really goes nuts and the MetOne doesn't pick up on much, and this might mask what is probably more correlation for the rest of the time.   
+We used the raw data for that correlation plot. But we should check if the hourly or daily averages show more correlation. 
+
+hourly:
+```{r}
+cov(hcomparek$hpm2.5_egg,hcomparek$hpm2.5_met,use="complete.obs")
+cor(hcomparek$hpm2.5_egg,hcomparek$hpm2.5_met,use="complete.obs") 
+```
+
+
+daily:
+```{r}
+cov(dcomparek$dpm2.5_egg,dcomparek$dpm2.5_met,use="complete.obs")
+cor(dcomparek$dpm2.5_egg,dcomparek$dpm2.5_met,use="complete.obs") 
+```
+
+Daily averages show more correlation than the raw data (.54 vs .41)
+
+When comparing cheaper sensor to reference sensors, this EPA guide suggests calculating R squared (correlation of determination) in addition to plotting the sensor against each other and calculating the correlation (r) :  [Collocation guide](https://www.epa.gov/sites/production/files/2018-01/documents/collocation_instruction_guide.pdf)
+
+I'll return to looking at Rsquared in the linear modeling to follow. But here it is now, just squaring the correlation coefficient for the daily averages:
+```{r}
+cor(dcomparek$dpm2.5_egg,dcomparek$dpm2.5_met,use="complete.obs")^2
+```
+
+
+
+The same pdf talks about a sensor study in Colorado and also shares the Root Mean Square Error of the cheaper and reference sensor. So here's that in case you're interested:
+```{r}
+#Root Mean Squared Error, calling Metone Predicted
+result = rmse(dcomparek$dpm2.5_met,dcomparek$dpm2.5_egg)
+print(result)
+```
+
+Here's just some summaries to see the spread of the variables and their extremes:
+```{r}
+#summary stats of whole dataset
+describe(comparek)
+```
+
+
+```{r}
+summary(comparek)
+```
+
+Boxplots: We will look at boxplots for the two sensors for the whole period, and then broken down by month. 
+```{r}
+#prepare data for boxplots
+bcomparek <- comparek %>%
+  mutate(
+    month = month(time, label=TRUE)
+        ) %>%
+  gather(`Sensor`, pm2.5,c(pm2.5_met,pm2.5_egg))
+
+ggplot(bcomparek,aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_boxplot() +
+  stat_boxplot(geom = "errorbar") +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "with outliers"
+    )) +
+  #scale_y_continuous(limits = c(0,60)) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=2, name="Darjeeling1"),labels = c("Egg","MetOne"))
+```
+Hard to see what's happening with the boxes because of the outliers. Let's drop them. 
+```{r}
+
+
+
+ggplot(bcomparek,aes(x=time,pm2.5, fill = `Sensor`)) +
+  geom_boxplot(outlier.shape = NA) +
+  stat_boxplot(geom = "errorbar") +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "with outliers"
+    )) +
+  scale_y_continuous(limits = c(0,30)) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=2, name="Darjeeling1"),labels = c("Egg","MetOne"))
+```
+Confirms that Egg PM2.5 has a higher central tendency, and also larger variance than the PM2.5 from MetOne. We saw from the summaries that the PM2.5 data from the MetOne had a mean of 2.7, while the PM2.5 data from the egg had a mean of 8.22
+
+Let's do a little hypothesis testing to confirm our assumption that the difference in means is statistically significant.
+
+
+```{r}
+t.test(x=comparek$pm2.5_egg, y=comparek$pm2.5_met, alternative = "greater", conf.level = .95)
+```
+So there is evidence at this level of significance that the mean of the PM2.5 readings from the Egg is higher than the PM2.5 readings from the MetOne. That is, the Egg's readings average higher, and it is unlikely to be due to a fluke of chance in sampling. 
+
+But wait! Recall from our exploratory visualizations that the PM2.5 data from both sensors does not seem normally distributed:
+
+```{r}
+ad.test(comparek$pm2.5_met)
+ad.test(comparek$pm2.5_egg)
+```
+Not normally distributed! That's probably ok, because from my reading the t test is fairly robust to non-normality when you have a large sample size (which we certainly do). But let's use a test that doesn't assume normality of the data just to check:
+
+```{r}
+wilcox.test(x=comparek$pm2.5_egg, y=comparek$pm2.5_met, alternative = "greater",exact = FALSE, correct = FALSE)
+```
+
+Ok, great. That feels resolved. 
+
+Here are some boxplots breaking the data down by month:
+
+```{r}
+#Boxplots by month w/ outliers
+ggplot(bcomparek,aes(x=month,pm2.5, fill = `Sensor`)) +
+  geom_boxplot() +
+  stat_boxplot(geom = "errorbar") +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "with outliers"
+    )) +
+  #scale_y_continuous(limits = c(0,60)) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=2, name="Darjeeling1"),labels = c("Egg","MetOne"))
+```
+
+```{r}
+#Boxplots by month w/out outliers
+ggplot(bcomparek,aes(x=month,pm2.5, fill = `Sensor`)) +
+  geom_boxplot(outlier.shape = NA) +
+  stat_boxplot(geom = "errorbar") +
+  labs(
+    y = expression(PM2.5 - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "with outliers"
+    )) +
+  scale_y_continuous(limits = c(0,60)) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=2, name="Darjeeling1"),labels = c("Egg","MetOne"))
+```
+Lastly, we will plot the PM2.5 from the MetOne against the readings from the Egg:
+
+```{r}
+#hexbin
+ggplot(comparek, aes(pm2.5_met,pm2.5_egg)) +
+  geom_hex(bins=80) +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_classic()
+```
+
+So we've established that the Egg has a higher mean and variance for its PM2.5 readings than the MetOne. This is the case overall, as well as when broken down by month (for most of the months). The PM2.5 readings from the two sensors have a statistically significant correlation, though the correlation as measured is only between .41 - .54. 
+
+I will follow up and do another Rnotebook showing my attempts to better describe the relationship between the two sensors with linear modeling. 
+
+In the meantime, the lingering question that I have is: what do you do with this information? If these air sensors are relatively consistent (*that's an assumption) but differ from each other, how does this affect how you treat their observations? Is it worth attempting to "correct" the data from the cheaper egg sensors when the MetOne sensor (and the QuantAQ too) are themselves approximating the PM2.5? Or is it rather a reminder that we should just compare like sensors unless we have evidence that we can do otherwise? With that attitude, we would watch sensors for trends over time, or compare between different locations that both are using the same model of sensor, but we wouldn't try to compare or merge data from two different model sensors. 
+
+I was struck by how, in the EPA's tests of cheaper sensors compared to the reference [sensors](https://www.epa.gov/air-sensor-toolbox/evaluation-emerging-air-sensor-performance), the cheaper sensors did not correlate very well with the reference sensors. I don't think that this means we shouldn't be using these less expensive sensors, but I'm curious to your thoughts on what principles we need to use to responsibly use the data from these sensors. 
+
+
+

@@ -1,0 +1,192 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#traffic below
+
+
+tcomparek <- comparek %>%
+  mutate(
+    month = month(time, label=TRUE),
+    dayofweek = wday(time),
+    hour = hour(time),
+  ) %>%
+  filter(
+    dayofweek > 1,
+    dayofweek < 7,
+  ) %>%
+  group_by(month,hour) %>% #group by the date and hour columns
+  summarise(hpm2.5_egg = mean(pm2.5_egg),
+            hpm2.5_met = mean(pm2.5_met),
+            hco2_egg = mean(co2_egg),    
+            ho3_egg =  mean(o3_egg),
+  )
+
+
+#egg facet hourly
+ggplot(data =  tcomparek,aes(x = hour,y = hpm2.5_egg) ) +
+  geom_point(aes(y = hpm2.5_egg), color = "red", size= 1) +
+  geom_line(aes(y = hpm2.5_egg)) +
+  #scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "PM2.5",
+    x = "Hour",
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5 by hour - Weekdays - Egg"
+    )) +
+  facet_wrap(~month, ncol = 3, scales = "free") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+#MetOne facet hourly
+ggplot(data =  tcomparek,aes(x = hour,y = hpm2.5_met) ) +
+  geom_point(aes(y = hpm2.5_met), color = "red", size= 1) +
+  geom_line(aes(y = hpm2.5_met)) +
+  #scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "PM2.5",
+    x = "Hour",
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5 by hour - Weekdays - MetOne"
+    )) +
+  facet_wrap(~month, ncol = 3, scales = "free") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+#egg Co2 facet hourly
+ggplot(data =  tcomparek,aes(x = hour,y = hco2_egg) ) +
+  geom_point(aes(y = hco2_egg), color = "red", size= 1) +
+  geom_line(aes(y = hco2_egg)) +
+  #scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "PM2.5",
+    x = "Hour",
+    title = paste(
+      "2020 CO2 - Kingston"
+    ),
+    subtitle = paste(
+      "CO2 by hour - Weekdays - Egg"
+    )) +
+  facet_wrap(~month, ncol = 3, scales = "free") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+#egg O3 facet hourly
+ggplot(data =  tcomparek,aes(x = hour,y = ho3_egg) ) +
+  geom_point(aes(y = ho3_egg), color = "red", size= 1) +
+  geom_line(aes(y = ho3_egg)) +
+  #scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "PM2.5",
+    x = "Hour",
+    title = paste(
+      "2020 O3 - Kingston"
+    ),
+    subtitle = paste(
+      "O3 by hour - Weekdays - Egg"
+    )) +
+  facet_wrap(~month, ncol = 3, scales = "free") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+#just looking at hourly look at weekdays
+hcomparek <- comparek %>%
+  mutate(
+    dayofweek = wday(time),
+    hour = hour(time),
+  ) %>%
+  filter(
+    dayofweek > 1,
+    dayofweek < 7,
+  ) %>%
+  group_by(hour) %>% 
+  summarise(hpm2.5_egg = mean(pm2.5_egg),
+            hpm2.5_met = mean(pm2.5_met),
+            hco2_egg = mean(co2_egg),    
+            ho3_egg =  mean(o3_egg),
+  )
+
+#overall hourly PM2.5 = MetOne
+ggplot(data =  hcomparek,aes(x = hour,y = hpm2.5_met) ) +
+  geom_point(aes(y = hpm2.5_met), color = "red", size= 1) +
+  geom_line(aes(y = hpm2.5_met)) +
+#scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "PM2.5",
+    x = "Hour",
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5 by hour - Weekday - MetOne"
+    )) +
+theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+
+#overall hourly PM2.5 - Egg
+ggplot(data =  hcomparek,aes(x = hour,y = hpm2.5_egg) ) +
+  geom_point(aes(y = hpm2.5_egg), color = "red", size= 1) +
+  geom_line(aes(y = hpm2.5_egg)) +
+  #scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "PM2.5",
+    x = "Hour",
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5 by hour - Weekday - Egg"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+#overall hourly CO2 - Egg
+ggplot(data =  hcomparek,aes(x = hour,y = hco2_egg) ) +
+  geom_point(aes(y = hco2_egg), color = "red", size= 1) +
+  geom_line(aes(y = hco2_egg)) +
+  #scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "CO2",
+    x = "Hour",
+    title = paste(
+      "2020 CO2 - Kingston"
+    ),
+    subtitle = paste(
+      "CO2 by hour - Weekdays - Egg"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+#overall hourly O3 - Egg
+ggplot(data =  hcomparek,aes(x = hour,y = ho3_egg) ) +
+  geom_point(aes(y = ho3_egg), color = "red", size= 1) +
+  geom_line(aes(y = ho3_egg)) +
+  #scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "O3",
+    x = "Hour",
+    title = paste(
+      "2020 O3 - Kingston"
+    ),
+    subtitle = paste(
+      "O3 by hour - Weekdays - Egg"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))

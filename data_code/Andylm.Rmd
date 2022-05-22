@@ -1,0 +1,162 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+###linear modeling
+
+###lm w weather too
+#read in the tibble prepared by weatherdata.R script
+fulldf <- read_feather("fulldf.feather")
+
+fullmet <- fulldf %>% 
+  select(
+    Time,Temp,RH,pm2.5,pm10,avg_wind_sonic_mph, precip_max_hr
+  ) %>%
+  rename(
+    time = Time,
+    temp_met = Temp,
+    rh_met = RH,
+    pm2.5_met = pm2.5,
+    pm10_met = pm10
+  )
+
+fcomparek <- left_join(fullmet,eggmasterk,by = "time") %>%
+ # select(-c("time")) %>%
+  na.omit()
+
+#condensing to hourly
+fhcomparek <- fcomparek %>%
+  mutate(hour = hour(time), date = as_date(time))
+fhcomparek <- fhcomparek %>%
+  group_by(date,hour) %>% #group by the date and hour columns
+  summarise(hpm2.5_egg = mean(pm2.5_egg),
+            hpm2.5_met = mean(pm2.5_met),
+            temp_egg = mean(temp_egg),
+            rh_egg = mean(rh_egg),
+            avg_wind_sonic_mph = mean(avg_wind_sonic_mph), 
+            precip_max_hr = mean(precip_max_hr)
+  )
+
+fhcomparek <- fhcomparek %>%
+  mutate(YMDH = ymd_h(paste(date,hour)))%>%
+  na.omit()
+
+#splitting into testing and training
+dt = sort(sample(nrow(fhcomparek), nrow(fhcomparek)*.7))
+train <- fhcomparek[dt,]
+test <- fhcomparek[-dt,]
+
+fit <- lm(hpm2.5_met~hpm2.5_egg,data=train)
+train$fitted <- fitted(fit)
+train$resid <- resid(fit)
+
+
+#more predictive variables
+fit <- lm(hpm2.5_met~hpm2.5_egg + rh_egg + temp_egg + avg_wind_sonic_mph,data=train)
+train$fitted <- fitted(fit)
+
+#
+fit <- lm(hpm2.5_met~hpm2.5_egg + rh_egg + temp_egg + temp_egg:hpm2.5_egg + avg_wind_sonic_mph,data=train)
+
+#gam
+fit <- gam(hpm2.5_met~s(hpm2.5_egg) + s(rh_egg) + s(temp_egg) + s(avg_wind_sonic_mph), data=train)
+train$fitted <- fitted(fit)
+train$resid <- resid(fit)
+
+#still figuring out: evaluating predicted model
+p = predict(fit, test)
+cor(p,test$hpm2.5_met)
+plot(p,test$hpm2.5_met)
+
+
+#fhcomparek, now with LM fitted values
+#melted for legend - Scale limited
+ggplot(gather(train,`Sensor`, sensor,c(hpm2.5_met,hpm2.5_egg,fitted)),
+       aes(YMDH,sensor, color = `Sensor`)) +
+  geom_point(size = .3, alpha = .4) +
+  geom_smooth() +
+  labs(
+    y = expression(Mass - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5"
+    )) +
+  theme_classic() +
+  scale_y_continuous(limits = c(0,40)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=3, name="Darjeeling1"),labels = c("MetOne","Egg","Fitted Values"))
+
+#Scatterplot w Met and Egg + RH 
+ggplot(data =  fhcomparek,aes(x = hpm2.5_egg,y = hpm2.5_met, color = rh_egg) ) +
+  geom_point() +
+  geom_smooth(se=FALSE) +
+  #scale_y_continuous(limits = c(2,5)) +
+  scale_x_continuous(limits = c(0,65)) +
+  labs(
+    y = "hpm2.5_met",
+    x = "hpm2.5_egg",
+    title = paste(
+      "2020 PM2.5 - Kingston"
+    ),
+    subtitle = paste(
+      "Egg compared to MetOne"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))+
+  scale_colour_gradient(low = "yellow", high = "blue", na.value = NA)
+
+
+###lm with no weather
+fit <- lm(hpm2.5_met~hpm2.5_egg,data=hcomparek)
+hcomparek$fitted <- fitted(fit)
+
+
+#Scatterplot w Met and Egg
+ggplot(data =  hcomparek,aes(x = hpm2.5_egg,y = hpm2.5_met) ) +
+  geom_hex(bins=60) +
+  geom_smooth(method="lm", se=FALSE) +
+  #scale_y_continuous(limits = c(2,5)) +
+  labs(
+    y = "hpm2.5_met",
+    x = "hpm2.5_egg",
+    title = paste(
+      "2020 PM2.5 - Kingston"
+    ),
+    subtitle = paste(
+      "Egg compared to MetOne"
+    )) +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+
+#hourly, now with LM fitted values
+#melted for legend - Scale limited
+ggplot(gather(hcomparek,`Sensor`, sensor,c(hpm2.5_met,hpm2.5_egg,fitted)),
+       aes(YMDH,sensor, color = `Sensor`)) +
+  geom_point(size = .3, alpha = .4) +
+  geom_smooth() +
+  labs(
+    y = expression(Mass - (μg/~m^3)),
+    x = NULL,
+    title = paste(
+      "2020 Particulate Matter - Kingston"
+    ),
+    subtitle = paste(
+      "PM2.5 Hourly Averages"
+    )) +
+  theme_classic() +
+  scale_y_continuous(limits = c(0,40)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_color_manual(values=wes_palette(n=3, name="Darjeeling1"),labels = c("MetOne","Egg","Fitted Values"))
+
+```
